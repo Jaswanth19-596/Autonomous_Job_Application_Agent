@@ -1,0 +1,6 @@
+# Target job
+<job_url>
+{job_url}
+</job_url>
+
+Locate this job's application entry page and determine whether authentication is required.

@@ -1,0 +1,6 @@
+# Authentication target
+<job_url>
+{job_url}
+</job_url>
+
+Authenticate to this job-application site using only the authorized methods and supplied credentials.

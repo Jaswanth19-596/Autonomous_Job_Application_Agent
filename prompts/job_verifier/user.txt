@@ -1,0 +1,6 @@
+# Job to verify
+<job_url>
+{job_url}
+</job_url>
+
+Verify this job using the eligibility policy in the system instructions.

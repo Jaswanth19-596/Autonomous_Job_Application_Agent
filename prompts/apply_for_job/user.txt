@@ -1,0 +1,21 @@
+# Target application
+<job_url>
+{job_url}
+</job_url>
+
+# User profile and saved answers
+<user_profile>
+{user_profile}
+</user_profile>
+
+# Resume text
+<resume_text>
+{resume_data}
+</resume_text>
+
+# Resume file to upload
+<resume_file_path>
+{resume_file_path}
+</resume_file_path>
+
+Complete, review, submit, and verify this one application according to the system policy.

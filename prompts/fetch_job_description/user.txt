@@ -1,0 +1,11 @@
+# Input URL
+<job_url>
+{job_url}
+</job_url>
+
+# Job page text
+<job_page_text>
+{page_text}
+</job_page_text>
+
+Extract the target job's details from this source into the provided structured-output schema.
