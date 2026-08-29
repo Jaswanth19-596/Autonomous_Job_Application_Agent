@@ -1,0 +1,53 @@
+JASWANTH MADA
+Hammond, IN | 219-466-5564 | madhajaswanth@gmail.com | Linkedin | Github | Portfolio
+SUMMARY
+Applied AI / Machine Learning Engineer specializing in multi-agent orchestration, production RAG pipelines, and LLM application
+development.
+EDUCATION
+Purdue University Northwest Aug 2023 - May 2025
+Masters, Computer Science Hammond, IN
+TECHNICAL SKILLS
+• Programming & Core ML: Python, NumPy, Pandas, Scikit Learn, PyTorch
+• Agentic AI & Orchestration: Crew AI, Multi Agent Systems, ReAct Pattern, Planning Pattern, Tool Use, Agent Memory
+Management, Guardrails & Output Validation, Human-In-The-Loop, Agent Callbacks
+• Cloud & AWS: EC2, S3, Lambda, API Gateway, SQS, DynamoDB, ElasticCache(Redis), CloudWatch
+• Databases: MySQL, PostgreSQL, DynamoDB, Redis
+• Software Engineering: OOP, Data Structures & Algorithms, Design Patterns, Multithreading, Concurrency
+• LLMs & Retrieval Systems: RAG, LangChain, Pinecone, Prompt Engineering, Embedding Based Search
+EXPERIENCE
+Accessifiers Aug 2025 - Jun 2026
+Machine Learning Engineer
+• Engineered an internal LLM-powered document Q&A system using Python, LangChain, and Pinecone, reducing time spent on policy
+and technical document lookups by 35% for research and engineering users.
+• Implemented a scalable document ingestion and chunking pipeline on AWS (S3, Lambda) to process and refresh 100K+ pages of PDFs
+and markdown content with consistent retrieval behavior.
+• Optimized prompt templates, retrieval depth, and citation logic using OpenAI APIs and prompt versioning, cutting irrelevant or partially
+grounded responses by 25% in internal validation.
+• Automated testing and deployment workflows with GitHub Actions and pytest, validating prompt changes and retrieval outputs and
+lowering release-related issues by 30%.
+• Instrumented latency, token usage, and error metrics using CloudWatch and logging, keeping average response time under 3 seconds
+while managing inference cost during peak usage.
+PROJECTS
+Autonomous Multi-Agent Job Application System | Python, LangGraph, MCP, Playwright, OpenRouter, Apify Github
+• Engineered a hierarchical multi-agent framework using LangGraph to automate end-to-end job applications, implementing a
+sequential Manager-Worker state machine with deterministic fallback for CAPTCHAs and scam detection.
+• Reduced LLM token overhead by implementing an active memory-management pipeline that prunes heavy DOM payloads from
+context windows beyond 18 conversation turns while preserving critical action history.
+• Integrated MCP-based browser and Gmail tooling with asynchronous session management, dynamic tool discovery, timeout
+handling, graceful server recovery, and human-in-the-loop interaction for unknown application questions.
+• Built a resilient tool-execution runtime with human-in-the-loop approval gates for high-risk actions, automatic exception recovery,
+and asynchronous MCP tool resolution.
+Agentic Content Writing System
+• Built a production-grade Multi-Agent content writing system, evolving from a single-agent baseline to a fully orchestrated,
+multi-role crew applying all core agentic AI patterns in a unified implementation.
+• Implemented the ReAct (Reasoning + Acting) pattern, enabling agents to reason step-by-step, dynamically select tools, and
+self-correct before producing outputs, reducing hallucinations and improving task reliability.
+• Designed a multi-agent crew with specialized roles (Researcher, Writer, and Editor) using hierarchical and sequential process
+modes with inter-agent task delegation and context passing between crew members.
+• Implemented guardrails and validation layers to intercept malformed outputs, trigger retry logic, and enforce editorial constraints
+like word count bounds before output propagation.
+• Managed short-term, long-term, entity, and contextual memory across agent interactions, enabling the crew to retain context
+across tasks and reduce redundant information retrieval.
+Achievements
+• ICPC:Ranked 43 out of 89 teams in the USA Mid-Center Regional ICPC Contest.
+• IEEE Xtreme:Ranked 29 out of 149 teams in the 18th Annual Global IEEE Xtreme Programming Competition.

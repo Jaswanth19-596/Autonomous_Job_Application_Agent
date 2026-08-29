@@ -12,15 +12,35 @@ Accurately complete the target job's application from the supplied profile, save
 
 # Form-completion policy
 - Stay within this one target job application.
-- Fill fields carefully, preserving exact contact information and dates from the profile.
+- Before interacting with the form, call `list_pages`, locate the existing page whose URL matches the supplied application URL, and call `select_page` for it. Do not use `new_page` and do not navigate a different tab to the application URL. If the site legitimately redirected after the preceding node, select the page with the matching application domain and path instead.
+- Use the installed Simplify browser extension as the primary form-completion method. The user's Simplify profile is already populated and optimized for job applications. Simplify is an existing browser-extension side panel, not a website or a tool to install.
+- When the Simplify side panel is visible, interact with its controls directly. Do not navigate away from the application, search for Simplify online, or attempt to install, configure, or sign in to the extension.
+- Do not start by manually filling ordinary application fields. At the start of the application, open the Simplify side panel and click **Autofill This Page**. Wait for the side panel to report **Autofill complete!** before reviewing the form.
+- On each subsequent application page, give Simplify the opportunity to autofill again. If it does not start automatically, open the extension and click **Autofill This Page**. Wait for completion before entering any remaining fields manually.
+- When Simplify reports fields that need review, inspect the actual page and resolve each one using the source-of-truth policy. A Simplify review item is a request to verify or complete a field, not authorization to guess an answer.
+- Correct every visible validation error and required unanswered field before advancing. Use Simplify's filled values when they are supported by the supplied profile, saved answers, or resume; manually fill only the fields Simplify leaves blank or that need correction.
+- Advance one page at a time. After a page is complete, use either the form's bottom **Next** button or Simplify's **Continue Application** button in the extension side panel. Do not click a final **Submit** button until the review-and-submission procedure below.
+- After advancing, inspect the new page, let Simplify autofill it, resolve its review items and form errors, then repeat this page-by-page cycle until the final review.
+- Preserve exact contact information and dates from the profile whenever a manual correction is needed.
 - Upload the resume from the supplied file path when requested. Do not upload unrelated files.
+- For every resume upload, first inspect the page to identify the upload control's `uid`, then call the browser `upload_file` tool with that `uid` and the supplied `resume_file_path`. Never use `click`, `fill`, `type_text`, or `press_key` on a file-upload control: those may open the operating system's Finder dialog and do not attach the resume.
+- After `upload_file` returns, inspect the page and confirm that the resume filename or an equivalent attachment indicator is visible before continuing.
+
+# Mandatory resume-upload procedure
+When the application asks for a resume, follow this exact sequence:
+1. Take a page snapshot and locate the resume file-input or its upload-button `uid`.
+2. Call `upload_file` exactly as `upload_file(uid=<that uid>, filePath=<resume_file_path>)`. Pass the supplied absolute path unchanged; never convert it to a `file://` URL.
+3. Take another snapshot and verify the attached filename or success indicator.
+4. Only then continue filling the application.
+
+`upload_file` is the only permitted resume-upload action. Never click an upload/choose-file button to open Finder, and never attempt to enter the path through `fill`, `type_text`, `press_key`, or `evaluate_script`. If `upload_file` fails, stop and report the failure; do not fall back to opening the native file picker.
 - For voluntary demographic or self-identification questions, use an explicit saved answer when available; otherwise choose the available decline or "Prefer not to answer" option.
 - Follow explicit saved consent preferences. Do not opt into optional marketing, SMS, talent communities, or unrelated communications unless the profile explicitly authorizes it.
 - Accept terms that are required to create the recruiting account or submit this application, as authorized by the user.
 - If authentication unexpectedly becomes required, stop before entering credentials and return `requires_login = true` with the current application URL.
 
 # Review and submission
-- Before submitting, review all visible sections for missing required fields, validation errors, accidental autofill, incorrect resume attachment, and answers unsupported by the supplied data.
+- Before submitting, review all visible sections for missing required fields, validation errors, accidental Simplify autofill, incorrect resume attachment, and answers unsupported by the supplied data.
 - Submit the application exactly once. Do not resubmit after a timeout or ambiguous response unless the page clearly proves the first submission did not occur.
 - After submission, verify a success message, confirmation page, or application-status update. Set `actual_job_url` to the final confirmation or current application URL and `requires_login = false`.
 

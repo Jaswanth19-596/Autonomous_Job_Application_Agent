@@ -6,10 +6,26 @@ from mcp.client.stdio import stdio_client
 
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from google_auth_oauthlib.flow import InstalledAppFlow
+from mcp import types
 
 load_dotenv()
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+async def list_workspace_roots(_: object) -> types.ListRootsResult:
+    """Allow Chrome DevTools MCP to read only files from this project."""
+    return types.ListRootsResult(
+        roots=[
+            types.Root(
+                uri=PROJECT_ROOT.as_uri(),
+                name=PROJECT_ROOT.name,
+            )
+        ]
+    )
 
 
 @asynccontextmanager
@@ -24,7 +40,11 @@ async def silent_stdio_session(server_config):
 
     with open(os.devnull, "w", encoding="utf-8") as stderr:
         async with stdio_client(params, errlog=stderr) as (read, write):
-            async with ClientSession(read, write) as session:
+            async with ClientSession(
+                read,
+                write,
+                list_roots_callback=list_workspace_roots,
+            ) as session:
                 await session.initialize()
                 yield session
 

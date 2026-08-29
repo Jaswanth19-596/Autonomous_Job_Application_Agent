@@ -9,7 +9,7 @@ from typing import Any
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
-from src.data.job_identity import canonical_job_url, job_identity, linkedin_job_id
+from workbook.job_identity import canonical_job_url, job_identity, job_identity_aliases
 
 
 def _applications_sheet(workbook):
@@ -25,17 +25,16 @@ def _headers(sheet) -> dict[str, int]:
 
 
 def _matching_rows_for_job_id(sheet, headers: dict[str, int], job_id: str) -> list[int]:
-    """Match an exact stored ID or the stable LinkedIn ID embedded in its URL."""
+    """Match a deterministic ID or any strong identity available in the row."""
     target = str(job_id).strip()
     matches = []
     for row in range(2, sheet.max_row + 1):
-        stored_id = str(sheet.cell(row, headers["id"]).value or "").strip()
-        linked_in_ids = {
-            linkedin_job_id(sheet.cell(row, headers[field]).value)
-            for field in ("link", "applyUrl")
+        record = {
+            field: sheet.cell(row, headers[field]).value
+            for field in ("id", "link", "applyUrl", "jobboard")
             if field in headers
         }
-        if stored_id == target or target in linked_in_ids:
+        if target in job_identity_aliases(record):
             matches.append(row)
     return matches
 
@@ -62,13 +61,12 @@ def get_job_row(path: Path, job_id: str) -> dict[str, str] | None:
         target_id = str(job_id).strip()
         matches = []
         for row in sheet.iter_rows(min_row=2, values_only=True):
-            stored_id = str(row[headers["id"]] or "").strip()
-            linked_in_ids = {
-                linkedin_job_id(row[headers[field]])
-                for field in ("link", "applyUrl")
+            record = {
+                field: row[headers[field]]
+                for field in ("id", "link", "applyUrl", "jobboard")
                 if field in headers and headers[field] < len(row)
             }
-            if stored_id != target_id and target_id not in linked_in_ids:
+            if target_id not in job_identity_aliases(record):
                 continue
             matches.append({
                 header: "" if index >= len(row) or row[index] is None else str(row[index])
@@ -196,15 +194,18 @@ def upsert_job_row(
     target_row = canonical_matches[0] if canonical_matches else None
 
     if target_row is None:
-        id_value = str(record.get("id", "")).strip()
-        id_column = headers.get("id")
+        incoming_aliases = job_identity_aliases(record)
         id_matches = [
             row for row in range(2, sheet.max_row + 1)
-            if id_column is not None and str(sheet.cell(row, id_column).value or "").strip() == id_value
+            if incoming_aliases.intersection(job_identity_aliases({
+                field: sheet.cell(row, headers[field]).value
+                for field in ("id", "link", "applyUrl", "jobboard")
+                if field in headers
+            }))
         ]
         if len(id_matches) > 1:
             raise ValueError(
-                f"Job ID '{id_value}' is ambiguous: {len(id_matches)} rows share it. "
+                f"Job identity '{record['id']}' is ambiguous: {len(id_matches)} rows share it. "
                 "Refusing to refresh an arbitrary row."
             )
         target_row = id_matches[0] if id_matches else None
