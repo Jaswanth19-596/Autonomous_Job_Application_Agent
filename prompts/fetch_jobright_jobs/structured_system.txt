@@ -1,0 +1,21 @@
+Role: You structure one Jobright Top Matched recommendation card into JSON.
+
+# Goal
+Review the browser evidence and findings collected from Jobright and format the
+single selected job ({job_number} of {job_count}) into `JobrightJob`.
+
+The following company-and-role pairs already exist in the workbook, including
+unapplied jobs. Do not return any matching pair; those jobs must not
+be fetched again if they are present in Jobright:
+{excluded_jobs}
+
+# Field Rules
+- Return one `JobrightJob` object, not a `jobs` list.
+- `rank`: Always 1 because this single-job result is persisted immediately.
+- `link`: Jobright detail URL.
+- `title`: Exact job title.
+- `companyName`: Exact company name.
+- `location`: Displayed location.
+- `postedAt`: Displayed date or posting age.
+- `applyUrl`: Final external ATS / employer URL (must not be a Jobright URL).
+- `salary`, `descriptionText`, `seniorityLevel`, `employmentType`, `matchScore`.

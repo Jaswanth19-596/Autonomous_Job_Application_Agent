@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import copy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,15 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
 from workbook.job_identity import canonical_job_url, job_identity, job_identity_aliases
+
+
+@dataclass(frozen=True)
+class JobRowsUpsertResult:
+    """Summary of a batch write that never creates duplicate workbook rows."""
+
+    inserted: int = 0
+    updated: int = 0
+    skipped_duplicates: int = 0
 
 
 def _applications_sheet(workbook):
@@ -230,6 +240,46 @@ def upsert_job_row(
     _extend_tables(sheet)
     workbook.save(path)
     return action, target_row
+
+
+def upsert_job_rows(
+    path: Path,
+    rows: list[dict[str, Any]],
+    *,
+    preserve_existing: set[str] | None = None,
+) -> JobRowsUpsertResult:
+    """Persist a batch of job rows without adding duplicate jobs.
+
+    Each row is compared with the existing workbook through ``upsert_job_row``.
+    Duplicate records returned in the same batch are skipped before they can
+    overwrite one another. Existing jobs are refreshed in place, preserving the
+    caller-specified fields such as application status.
+    """
+    inserted = updated = skipped_duplicates = 0
+    batch_aliases: set[str] = set()
+
+    for row in rows:
+        aliases = job_identity_aliases(row)
+        if aliases.intersection(batch_aliases):
+            skipped_duplicates += 1
+            continue
+
+        action, _ = upsert_job_row(
+            path,
+            row,
+            preserve_existing=preserve_existing,
+        )
+        batch_aliases.update(aliases)
+        if action == "inserted":
+            inserted += 1
+        else:
+            updated += 1
+
+    return JobRowsUpsertResult(
+        inserted=inserted,
+        updated=updated,
+        skipped_duplicates=skipped_duplicates,
+    )
 
 
 def append_job_rows(path: Path, rows: list[dict[str, Any]]) -> int:

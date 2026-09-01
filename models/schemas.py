@@ -1,21 +1,83 @@
 """Pydantic schemas for workflow decisions and extracted job data."""
 
+from pydantic import HttpUrl
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
 
+class JobQueryFilter(BaseModel):
+    query: str = Field(description="The query to be used for searching jobs.")
+    n: int = Field(ge = 1, le = 5, default = 5, description = "Number of jobs to fetch")
+    sort_by: Literal["postedAt"] = "postedAt"
+    order: Literal["desc", "asc"] = "desc"
+
+
+class FetchJobDescriptionDecision(BaseModel):
+    job_url: str = Field(
+        description=(
+            "The exact job-posting URL supplied by the user or selected"),
+    )
+
+class DispatchJobsDecision(BaseModel):
+    job_query_filter : JobQueryFilter = Field(description="Job search filter to be used for searching jobs")
+
+
+class FetchJobrightJobsDecision(BaseModel):
+    """The number of ranked Jobright recommendations to import."""
+
+    job_count: int = Field(
+        ge=1,
+        le=5,
+        default=5,
+        description="Number of Jobright Top Matched recommendations to fetch (1 through 5).",
+    )
+
+
 class UserRequestRoutingDecision(BaseModel):
-    next_action: Literal["CHAT", "FETCH_JOB_DESCRIPTION", "VERIFY_JOB"]
-    message: str = Field(description="The message to be shown to the user.")
-    custom_job_url: str = Field(
-        default="", description="The custom job URL provided by user"
+    next_step: Literal[
+        "CHAT", "FETCH_JOB_DESCRIPTION", "DISPATCH_JOBS", "FETCH_JOBRIGHT_JOBS", "END"
+    ] = "CHAT"
+    
+    fetch_job_description_decision : Optional[FetchJobDescriptionDecision] = Field(default=None,description="Required if next_step is FETCH_JOB_DESCRIPTION.")
+    
+    dispatch_jobs_decision : Optional[DispatchJobsDecision] = Field(default=None, description="Required if next_step is DISPATCH_JOBS")
+
+    fetch_jobright_jobs_decision: Optional[FetchJobrightJobsDecision] = Field(
+        default=None,
+        description="Required if next_step is FETCH_JOBRIGHT_JOBS.",
     )
-    num_jobs_to_process: int = Field(
-        default=0, description="Number of jobs to process from the Excel file"
+
+
+class JobrightJob(BaseModel):
+    """One visible job card from Jobright's Top Matched recommendations."""
+
+    rank: int = Field(description="Its displayed position from 1 to n.")
+    link: str = Field(description="The Jobright detail URL used to inspect this recommendation.")
+    title: str = Field(description="Job title exactly as displayed.")
+    companyName: str = Field(description="Hiring company exactly as displayed.")
+    location: str = Field(default="", description="Displayed location and remote/hybrid mode.")
+    postedAt: str = Field(default="", description="Displayed posting age or date.")
+    applyUrl: str = Field(
+        description=(
+            "Final external employer or applicant-tracking-system URL reached from "
+            "Jobright's Apply action. It must not be a Jobright URL."
+        )
     )
-    excel_jobs_list: list[dict] = Field(
-        default_factory=list, description="List of Excel jobs to be processed"
+    salary: str = Field(default="", description="Displayed salary range, if any.")
+    descriptionText: str = Field(default="", description="Short visible job/company summary only.")
+    seniorityLevel: str = Field(default="", description="Displayed experience or seniority level.")
+    employmentType: str = Field(default="", description="Displayed employment type.")
+    matchScore: str = Field(default="", description="Displayed Jobright match score; not written to Excel.")
+
+
+class JobrightJobsResult(BaseModel):
+    """The n recommendations shown in Jobright's existing Top Matched order."""
+
+    jobs: list[JobrightJob] = Field(
+        min_length=1,
+        max_length=5,
+        description="Exactly the first n visible Top Matched jobs, in displayed order.",
     )
 
 
@@ -55,12 +117,14 @@ class JobListingDetails(BaseModel):
 
 class JobValidationResult(BaseModel):
     is_valid: bool = Field(description="True if the job is valid, False otherwise")
-    message: str = Field(description="The message to be shown to the user.")
-
+    reason_for_not_applying: str = Field(description="Reason for not applying if the job is not valid. Leave it blank if the job is valid.")
 
 class ApplicationAccessStatus(BaseModel):
-    requires_login: bool
-    actual_job_url: str
+    requires_login: bool = Field(description="True if the application requires login, False otherwise")
+    actual_job_url: str = Field(description="The URL to navigate to after login")
+    message: str = Field(
+        description="A concise explanation of the application access status."
+    )
 
 
 class AuthenticationResult(BaseModel):
@@ -70,9 +134,35 @@ class AuthenticationResult(BaseModel):
     logged_in_url: str = Field(
         description="The URL to navigate to after login"
     )
+    message: str = Field(
+        default="", description="A concise explanation of the authentication result."
+    )
 
 class ApplicationResult(BaseModel):
     is_applied: bool = Field(description="True if the application is successful, False otherwise")
     final_status_message: str = Field(description="The final status message to be shown to the user.")
     is_duplicate: bool = Field(description="True if the job is already applied for, False otherwise")
     url_applied_on: str = Field(description = "URL of the page that shows job application submitted, used by other agent to verify. ")
+    requires_human: bool = Field(
+        description=(
+            "True only for a CAPTCHA, MFA/security challenge, or another "
+            "required action the user must complete; otherwise False."
+        )
+    )
+    human_intervention_reason: Optional[Literal["CAPTCHA", "OTHER"]] = Field(
+        default=None,
+        description="CAPTCHA for a CAPTCHA; OTHER for any other human-only blocker; null when requires_human is False.",
+    )
+    human_intervention_prompt: str = Field(
+        default="",
+        description="A concise, actionable instruction for the human to complete the blocker on the current page; empty when requires_human is False.",
+    )
+
+
+class ApplicationVerificationResult(BaseModel):
+    application_status: Literal[
+        "Applied", "Not Applied", "Failed", "Needs CAPTCHA", "In Progress"
+    ] = Field(description="The verified application status shown by the application site.")
+    message: str = Field(
+        description="A concise explanation of the evidence supporting the verified status."
+    )

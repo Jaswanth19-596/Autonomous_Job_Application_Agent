@@ -1,0 +1,12 @@
+Jobright page URL: {jobright_url}
+
+This is job {job_number} of {job_count}. Navigate there and collect exactly one
+eligible listing in its existing Top Matched order. Follow that job's Apply
+action far enough to capture the final external employer/ATS URL. Do not apply to any jobs,
+change the user's Jobright filters, fill an application form, or submit one.
+
+Excluded company-and-role pairs from the workbook and this run:
+{excluded_jobs}
+
+Do not fetch any matching company-and-role pair again if it is present in
+Jobright. Skip it and choose the next eligible Top Matched listing instead.

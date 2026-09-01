@@ -6,7 +6,10 @@ from .schemas import (
     JobListingDetails,
     JobValidationResult,
     UserRequestRoutingDecision,
-    ApplicationResult
+    ApplicationResult,
+    ApplicationVerificationResult,
+    JobrightJob,
+    JobrightJobsResult,
 )
 
 __all__ = [
@@ -15,5 +18,8 @@ __all__ = [
     "JobListingDetails",
     "JobValidationResult",
     "UserRequestRoutingDecision",
-    "ApplicationResult"
+    "ApplicationResult",
+    "ApplicationVerificationResult",
+    "JobrightJob",
+    "JobrightJobsResult",
 ]
