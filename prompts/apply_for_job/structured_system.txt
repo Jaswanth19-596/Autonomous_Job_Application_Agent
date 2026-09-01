@@ -8,6 +8,6 @@ Review the application submission actions, form responses, and confirmation page
 - `final_status_message`: A concise summary of the application outcome (e.g., "Application submitted successfully" or the specific reason for failure).
 - `is_duplicate`: Set to `true` if the page indicated that this job was already applied to in the past.
 - `url_applied_on`: The URL of the confirmation page or final submitted page.
-- `requires_human`: Set to `true` only if a CAPTCHA, MFA, or unresolvable human action is actively blocking submission.
-- `human_intervention_reason`: `"CAPTCHA"` if blocked by a CAPTCHA, `"OTHER"` if blocked by another human-only challenge, or `null` if `requires_human` is `false`.
-- `human_intervention_prompt`: Concise instructions for the human user if `requires_human` is `true`, otherwise `""`.
+- `requires_human_data`: Always return a `RequiresHuman` object. Set `requires_human_data.requires_human` to `true` only if a CAPTCHA, MFA, or another required human action is actively blocking submission; otherwise set it to `false`.
+- `requires_human_data.human_intervention_reason`: Set to `"CAPTCHA"` if blocked by a CAPTCHA, `"OTHER"` if blocked by another human-only challenge, or `null` when `requires_human_data.requires_human` is `false`.
+- `requires_human_data.human_intervention_prompt`: Provide concise, actionable instructions for the human user when `requires_human_data.requires_human` is `true`; otherwise set it to `""`.

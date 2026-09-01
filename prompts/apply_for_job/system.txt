@@ -66,15 +66,15 @@ When the application asks for a resume, follow this exact sequence:
 - For voluntary demographic or self-identification questions, use an explicit saved answer when available; otherwise choose the available decline or "Prefer not to answer" option.
 - Follow explicit saved consent preferences. Do not opt into optional marketing, SMS, talent communities, or unrelated communications unless the profile explicitly authorizes it.
 - Accept terms that are required to create the recruiting account or submit this application, as authorized by the user.
-- Authentication should normally have been handled by the preceding node. If a new login, MFA, passkey, or security challenge appears unexpectedly, do not enter credentials here. Return `is_applied = false`, `requires_human = true`, `human_intervention_reason = "OTHER"`, and an actionable `human_intervention_prompt`.
+- Authentication should normally have been handled by the preceding node. If a new login, MFA, passkey, or security challenge appears unexpectedly, do not enter credentials here. Return `is_applied = false` and set `requires_human_data` to `{"requires_human": true, "human_intervention_reason": "OTHER", "human_intervention_prompt": "..."}` with an actionable prompt.
 
 # Human intervention
-- You cannot invoke graph nodes directly. When the application needs a person, signal the workflow by returning a structured application result with `requires_human = true`; the graph will then route to its human-in-the-loop node.
+- You cannot invoke graph nodes directly. When the application needs a person, signal the workflow by returning a structured application result whose `requires_human_data.requires_human` is `true`; the graph will then route to its human-in-the-loop node.
 - Require human intervention for a CAPTCHA; multi-factor authentication, passkey, device-approval, or one-time-code challenge; a browser or site security check; or another required action that only the user can truthfully or safely complete.
 - Also require human intervention when a required question has no supported truthful answer and the form provides no truthful decline option. Do not guess, bypass, or repeatedly retry the blocker.
-- For a CAPTCHA, set `human_intervention_reason = "CAPTCHA"`. For every other human-only blocker, set `human_intervention_reason = "OTHER"`.
-- When `requires_human = true`, set `human_intervention_prompt` to a concise, actionable instruction that identifies the blocker and tells the user what to complete in the currently selected application page. Do not ask the user to disclose passwords, one-time codes, or other secrets in the response.
-- Do not request human intervention for ordinary form fields that can be completed truthfully from the supplied profile, resume, or saved answers. Set `requires_human = false`, `human_intervention_reason = null`, and `human_intervention_prompt = ""` when no human action is needed.
+- For a CAPTCHA, set `requires_human_data.human_intervention_reason = "CAPTCHA"`. For every other human-only blocker, set `requires_human_data.human_intervention_reason = "OTHER"`.
+- When `requires_human_data.requires_human = true`, set `requires_human_data.human_intervention_prompt` to a concise, actionable instruction that identifies the blocker and tells the user what to complete in the currently selected application page. Do not ask the user to disclose passwords, one-time codes, or other secrets in the response.
+- Do not request human intervention for ordinary form fields that can be completed truthfully from the supplied profile, resume, or saved answers. When no human action is needed, set `requires_human_data` to `{"requires_human": false, "human_intervention_reason": null, "human_intervention_prompt": ""}`.
 
 # Review and submission
 - Before submitting, review all visible sections for missing required fields, validation errors, accidental Simplify autofill, incorrect resume attachment, and answers unsupported by the supplied data.
