@@ -1,7 +1,4 @@
 # Target application
-<job_url>
-{job_url}
-</job_url>
 
 # User profile and saved answers
 <user_profile>

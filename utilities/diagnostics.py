@@ -2,9 +2,11 @@
 
 import json
 import re
+from functools import wraps
+from inspect import iscoroutinefunction
 from collections.abc import Awaitable
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any, Callable, TypeVar
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -24,7 +26,49 @@ def _print_progress(message: str) -> None:
 
 
 def log_node_stage(node_name: str, stage: str) -> None:
-    """Keep stage events available to callers without printing them by default."""
+    """Print intra-node stage progress with timestamp."""
+    _print_progress(f"[{node_name}] {stage}")
+
+
+def log_workflow_event(event: str, **details: Any) -> None:
+    """Print a compact, redacted workflow decision or state transition."""
+    detail_text = ""
+    if details:
+        safe_details = _shorten_values(_redact_sensitive_values(details))
+        detail_text = " " + json.dumps(safe_details, ensure_ascii=False, default=str)
+    _print_progress(f"↳ {event}{detail_text}")
+
+
+def trace_node(function: Callable[..., T]) -> Callable[..., T]:
+    """Print concise lifecycle lines for every graph node."""
+    node_name = function.__name__
+
+    if iscoroutinefunction(function):
+        @wraps(function)
+        async def async_wrapper(state: dict[str, Any], *args: Any, **kwargs: Any) -> T:
+            _print_progress(f"→ {node_name}")
+            try:
+                result = await function(state, *args, **kwargs)
+            except Exception as exc:
+                _print_progress(f"{node_name} — failed: {type(exc).__name__}: {exc}")
+                raise
+            _print_progress(f"← {node_name}")
+            return result
+
+        return async_wrapper
+
+    @wraps(function)
+    def sync_wrapper(state: dict[str, Any], *args: Any, **kwargs: Any) -> T:
+        _print_progress(f"→ {node_name}")
+        try:
+            result = function(state, *args, **kwargs)
+        except Exception as exc:
+            _print_progress(f"{node_name} — failed: {type(exc).__name__}: {exc}")
+            raise
+        _print_progress(f"← {node_name}")
+        return result
+
+    return sync_wrapper
 
 
 def _redact_sensitive_values(value: Any) -> Any:
@@ -140,12 +184,28 @@ async def await_with_progress(
     *,
     show_progress: bool = True,
 ) -> T:
-    """Await work in the current task while optionally showing a spinner."""
+    """Await work in the current task while showing real-time progress and duration."""
+    start_time = datetime.now()
     if show_progress:
-        with console.status(
-            f"[bold yellow]◌ {node_name}[/bold yellow] [dim]— {activity}[/dim]",
-            spinner="dots",
-            spinner_style="yellow",
-        ):
-            return await awaitable
-    return await awaitable
+        _print_progress(f"[{node_name}] Starting: {activity}")
+        try:
+            with console.status(
+                f"[bold yellow]◌ {node_name}[/bold yellow] [dim]— {activity}[/dim]",
+                spinner="dots",
+                spinner_style="yellow",
+            ):
+                result = await awaitable
+            elapsed = (datetime.now() - start_time).total_seconds()
+            _print_progress(f"[{node_name}] Finished: {activity} ({elapsed:.1f}s)")
+            return result
+        except Exception as exc:
+            elapsed = (datetime.now() - start_time).total_seconds()
+            _print_progress(f"[{node_name}] Failed: {activity} ({elapsed:.1f}s) — {type(exc).__name__}: {exc}")
+            raise
+    try:
+        result = await awaitable
+        return result
+    except Exception as exc:
+        elapsed = (datetime.now() - start_time).total_seconds()
+        _print_progress(f"[{node_name}] Failed: {activity} ({elapsed:.1f}s) — {type(exc).__name__}: {exc}")
+        raise

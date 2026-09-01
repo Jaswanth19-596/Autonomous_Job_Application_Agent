@@ -1,0 +1,7 @@
+# Application to verify
+
+<application_url>
+{application_url}
+</application_url>
+
+The prior application step reported `is_applied = {is_applied}`. Verify the status using the page evidence; do not rely on that value if the page contradicts it.

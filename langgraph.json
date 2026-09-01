@@ -3,7 +3,7 @@
         "."
     ],
     "graphs": {
-        "job_agent": "./app.py:app"
+        "job_agent": "./app.py:graph"
     },
     "env": ".env"
 }
