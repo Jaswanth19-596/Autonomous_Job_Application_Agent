@@ -11,44 +11,30 @@ logger = logging.getLogger(__name__)
 
 def route_user_request(state: dict[str, Any]) -> str:
     """Route a user request to the next workflow node."""
-    # ``user_request_phase`` is the graph state field. Keep accepting the
-    # original structured-output names so routing remains testable in isolation.
-    phase = (
-        state.get("user_request_phase")
+
+    next_node = (
+        state.get("user_node_decision")
+        or state.get("user_request_phase")
         or state.get("next_step")
         or state.get("next_action")
     )
+
     destinations = {
         "NEEDS_TOOLS": "tool_node",
         "CHAT": "collect_user_request",
-        "FETCH_JOB_DESCRIPTION": "extract_job_details",
+        "NEW_JOB_URL": "extract_job_details",
         "FETCH_JOBRIGHT_JOBS": "fetch_jobright_jobs",
-        "DISPATCH_JOBS": "prepare_job_application_queue",
+        "APPLY_FOR_JOBS": "prepare_job_application_queue",
         "END": "END",
     }
     try:
-        destination = destinations[phase]
+        destination = destinations[next_node]
     except KeyError as exc:
-        raise ValueError(f"Unsupported user-request phase: {phase}") from exc
+        raise ValueError(f"Unsupported user-request phase: {next_node}") from exc
 
     log_workflow_event(
         "route user_request_llm_node",
-        phase=phase,
-        destination=destination,
-    )
-    return destination
-
-
-def route_application_access(state: dict[str, Any]) -> str:
-    """Route based on whether the application site requires authentication."""
-    destination = (
-        "authenticate_with_job_site"
-        if state["requires_login"]
-        else "submit_job_application"
-    )
-    log_workflow_event(
-        "route intermediate_node_for_submit_job_application",
-        requires_login=state["requires_login"],
+        phase=next_node,
         destination=destination,
     )
     return destination
@@ -56,7 +42,7 @@ def route_application_access(state: dict[str, Any]) -> str:
 
 def route_after_validation(state: dict[str, Any]) -> str:
     if state["validation_phase"] == "ELIGIBLE":
-        destination = "build_application_url_messages"
+        destination = "resolve_application_url"
     elif state["validation_phase"] == "NOT_ELIGIBLE":
         destination = "update_job_status"
     elif state["validation_phase"] == "NEEDS_TOOLS":
@@ -64,18 +50,54 @@ def route_after_validation(state: dict[str, Any]) -> str:
     else:
         raise ValueError(f"Unsupported validation phase: {state['validation_phase']}")
     log_workflow_event(
-        "route validate_job_listing",
+        "route is_job_valid",
         phase=state["validation_phase"],
         destination=destination,
     )
     return destination
 
 
+def route_after_resolving_url(state: dict[str, Any]) -> str:
+    if state["resolution_phase"] == "NEEDS_TOOLS":
+        destination = "tool_node"
+    elif state["resolution_phase"] == "SUCCESS":
+        destination = "submit_job_application"
+    elif state["resolution_phase"] == "REQUIRES_LOGIN":
+        destination = "perform_login"
+    elif state["resolution_phase"] == "FAILED":
+        destination = "human_in_the_loop"
+    else:
+        raise ValueError(f"Unsupported resolution phase: {state['resolution_phase']}")
+    log_workflow_event(
+        "route resolve_application_url",
+        phase=state["resolution_phase"],
+        destination=destination,
+    )
+    return destination
+
+
+def route_after_login(state: dict[str, Any]) -> str:
+    """Return a completed login to the node that encountered its gate."""
+    phase = state["login_phase"]
+    if phase == "NEEDS_TOOLS":
+        destination = "tool_node"
+    elif phase == "SUCCESS":
+        destination = state.get("login_return_node", "")
+        if destination not in {"resolve_application_url", "submit_job_application"}:
+            raise ValueError(f"Unsupported login return node: {destination}")
+    elif phase == "FAILED":
+        destination = "human_in_the_loop"
+    else:
+        raise ValueError(f"Unsupported login phase: {phase}")
+    log_workflow_event("route perform_login", phase=phase, destination=destination)
+    return destination
+
+
 def route_after_dispatch(state: dict[str, Any]) -> str:
     """Start validation for the current queued job, or return to chat when exhausted."""
-    destination = "build_validation_messages" if state.get("has_next_job") else "collect_user_request"
+    destination = "build_validation_messages" if state.get("current_job") is not None else "collect_user_request"
     log_workflow_event(
-        "route dispatch_next_job",
+        "route dispath_job",
         has_next_job=state.get("has_next_job", False),
         remaining_jobs=len(state.get("application_queue", [])),
         destination=destination,
@@ -83,9 +105,22 @@ def route_after_dispatch(state: dict[str, Any]) -> str:
     return destination
 
 
+def route_after_jobright_collection(state: dict[str, Any]) -> str:
+    """Continue Jobright collection through the shared tool execution node."""
+    destination = state.get("next_step", "collect_user_request")
+    if destination not in {"tool_node", "fetch_jobright_jobs", "collect_user_request"}:
+        raise ValueError(f"Unsupported Jobright collection destination: {destination}")
+    log_workflow_event(
+        "route fetch_jobright_jobs",
+        destination=destination,
+        job_number=state.get("jobright_collection_job_number", 1),
+    )
+    return destination
+
+
 def route_after_job_status_update(state: dict[str, Any]) -> str:
     """Continue a batch sequentially after persisting the current job's outcome."""
-    destination = "dispatch_next_job" if state.get("application_queue") else "collect_user_request"
+    destination = "dispath_job" if state.get("application_queue") else "collect_user_request"
     log_workflow_event(
         "route update_job_status",
         remaining_jobs=len(state.get("application_queue", [])),
@@ -112,25 +147,29 @@ def route_after_verification(state: dict[str, Any]) -> str:
 
 
 def submit_application_decision(state: dict[str, Any]) -> str:
-    if state["requires_human"]:
-        return "human_intervention"
-    if state["is_applied"]:
-        return "update_job_status"
+    if state["job_application_phase"] == "NEEDS_TOOLS":
+        return "tool_node"
+    elif state["job_application_phase"] == "REQUIRES_LOGIN":
+        return "perform_login"
+    elif state["job_application_phase"] == "APPLIED":
+        return "build_verify_job_status_messages"
+    elif state["job_application_phase"] == "NOT_APPLIED":
+        return "human_in_the_loop" if state["requires_human"] else "update_job_status"
     else:
-        return "END"
+        raise ValueError(f"Unsupported job_application_phase: {state['job_application_phase']}")
     
 
-def conditional_edge_submit_job_application(state) -> str:
-    if state["requires_human"]:
-        destination = "human_in_the_loop"
-    else:
-        # submit_job_application has already decided the normal next step. Route
-        # through that decision so unsuccessful applications still update status.
-        destination = state["next_step"]
+# def submit_application_decision(state) -> str:
+#     if state["requires_human"]:
+#         destination = "human_in_the_loop"
+#     else:
+#         # submit_job_application has already decided the normal next step. Route
+#         # through that decision so unsuccessful applications still update status.
+#         destination = state["next_step"]
 
-    log_workflow_event(
-        "route submit_job_application",
-        requires_human=state["requires_human"],
-        destination=destination,
-    )
-    return destination
+#     log_workflow_event(
+#         "route submit_job_application",
+#         requires_human=state["requires_human"],
+#         destination=destination,
+#     )
+#     return destination

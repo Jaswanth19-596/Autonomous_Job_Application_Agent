@@ -1,0 +1,3 @@
+Resolve the application URL for this dispatched job and make it ready for the next step when possible:
+
+{job_url}

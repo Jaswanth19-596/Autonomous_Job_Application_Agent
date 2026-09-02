@@ -4,7 +4,8 @@ from collections import deque
 import asyncio
 from langgraph.types import interrupt
 from mcp_connection import mcp_manager
-from langchain_openrouter import ChatOpenRouter
+# from langchain_openrouter import ChatOpenRouter  # Disabled: OpenRouter is no longer used.
+from langchain_openai import ChatOpenAI
 import logging
 import json
 import os
@@ -12,15 +13,15 @@ from pathlib import Path
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 load_dotenv()
-from models import (
-    ApplicationAccessStatus,
+from models.schemas import (
+    ApplicationUrlResolution,
     AuthenticationResult,
-    JobListingDetails,
-    JobValidationResult,
-    UserRequestRoutingDecision,
+    JobDetailsModel,
+    ValidJobOrNotDecision,
     ApplicationResult,
     ApplicationVerificationResult,
     JobrightJob,
+    UserRequestDecision
 )
 from prompts import load_prompt
 from utilities import (
@@ -40,61 +41,31 @@ from jobs.fetcher import APPLICATION_METRIC_COLUMNS, JOB_COLUMNS
 from jobs.jobright import (
     JOBRIGHT_RECOMMENDED_URL,
     format_recent_workbook_jobs_for_prompt,
+    persist_jobright_jobs,
     recent_workbook_job_summaries,
-    workbook_rows_from_jobright_jobs,
 )
 from playwright.async_api import async_playwright
 import pandas as pd
 from mcp_connection.mcp_manager import MCPManager
 from langgraph.prebuilt import ToolNode
 from langchain.messages import ToolMessage
-from models.schemas import JobQueryFilter
 
-# OpenRouter provider slugs are verified against the model's endpoint list. Keep
-# this list in sync with the output-token price ceiling below.
-MAX_OUTPUT_PRICE_PER_MILLION_TOKENS = 0.28
-WANTED_OPENROUTER_PROVIDERS = [
-    "open-inference",  # $0.16/M output
-    "sail-research",  # $0.18/M output
-    "akashml",  # $0.18/M output
-    "relace",  # $0.18/M output
-    "deepinfra",  # $0.18/M output
-    "ambient",  # $0.18/M output
-    "makora",  # $0.195/M output
-    "wafer",  # $0.25/M output
-    "digitalocean",  # $0.252/M output
-    "baseten",  # $0.26/M output
-    "morph",  # $0.278/M output
-    "inceptron",  # $0.28/M output
-    "coreweave",  # $0.28/M output
-    "baidu",  # $0.28/M output
-    "parasail",  # $0.28/M output
-    "together",  # $0.28/M output
-]
-UNWANTED_OPENROUTER_PROVIDERS = [
-    "venice",
-    "mancer",
-    "streamlake",
-    "fireworks",
-    "reka",
-    "siliconflow",
-    "gmicloud",
-    "alibaba",
-    "nextbit",
-    "novita",
-    "atlas-cloud",
-    "phala",
-    "cloudflare",
-    "deepseek",
-]
-
-model = ChatOpenRouter(
-    model="deepseek/deepseek-v4-flash-0731",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    openrouter_provider={
-        "only": WANTED_OPENROUTER_PROVIDERS,
-        "ignore": UNWANTED_OPENROUTER_PROVIDERS,
-    },
+# Legacy OpenRouter setup is deliberately disabled. The selected OpenCode Go
+# model is served through its OpenAI-compatible Chat Completions API endpoint.
+# model = ChatOpenRouter(
+#     model="deepseek/deepseek-v4-flash-0731",
+#     api_key=os.getenv("OPENROUTER_API_KEY"),
+#     openrouter_provider={...},
+# )
+model = ChatOpenAI(
+    model="glm-5.3-flash",
+    api_key=os.getenv("OPENCODE_API_KEY"),
+    base_url="https://opencode.ai/zen/go/v1",
+    # DeepSeek V4 enables thinking by default, but its thinking mode rejects
+    # the forced tool choice LangChain uses for structured Pydantic output.
+    extra_body={"thinking": {"type": "disabled"}},
+    timeout=120.0,
+    max_retries=2,
 )
 
 
@@ -114,31 +85,33 @@ async def get_custom_model_with_tools(tool_list):
         tools.append(get_jobs)
     return model.bind_tools(tools=tools)
 
+def _with_go_structured_output(schema):
+    """Use tool-based structured output because Go does not support json_schema."""
+    return model.with_structured_output(schema, method="function_calling")
+
+
 def get_custom_structured_model(model_type):
-    if model_type == "application_model":
-        return model.with_structured_output(ApplicationResult)
+    if model_type == "job_application_model":
+        return _with_go_structured_output(ApplicationResult)
     elif model_type == "user_request_model":
-        return model.with_structured_output(UserRequestRoutingDecision)
-    elif model_type == "job_listing_model":
-        return model.with_structured_output(JobListingDetails)
+        return _with_go_structured_output(UserRequestDecision)
+    elif model_type == "job_details_model":
+        return _with_go_structured_output(JobDetailsModel)
     elif model_type == "job_validation_model":
-        return model.with_structured_output(JobValidationResult)
+        return _with_go_structured_output(ValidJobOrNotDecision)
+    elif model_type == "application_url_resolution_model":
+        return _with_go_structured_output(ApplicationUrlResolution)
     elif model_type == "authentication_model":
-        return model.with_structured_output(AuthenticationResult)
-    elif model_type == "application_access_model":
-        return model.with_structured_output(ApplicationAccessStatus)
+        return _with_go_structured_output(AuthenticationResult)
     elif model_type == "application_verification_model":
-        return model.with_structured_output(ApplicationVerificationResult)
+        return _with_go_structured_output(ApplicationVerificationResult)
     elif model_type == "jobright_job_model":
-        return model.with_structured_output(JobrightJob)
+        return _with_go_structured_output(JobrightJob)
     else:
         return None
     
 
 
-
-
-# application_model = model.with_structured_output(ApplicationResult)
 
 tools_by_name = {
     "get_jobs": get_jobs,
@@ -219,10 +192,11 @@ async def tool_node(state):
 
     message_keys = {
         "submit_job_application": "submit_job_application_messages",
-        "validate_job_listing": "validate_job_listing_messages",
+        "is_job_valid": "is_job_valid_messages",
         "resolve_application_url": "resolve_application_url_messages",
-        "authenticate_with_job_site": "authenticate_with_job_site_messages",
+        "perform_login": "perform_login_messages",
         "verify_job_status": "verify_job_status_messages",
+        "fetch_jobright_jobs": "jobright_collection_messages",
     }
     message_key = message_keys.get(state["tool_call_origin"], "messages")
     messages = state[message_key]
@@ -264,9 +238,11 @@ async def tool_node(state):
             )
         )
     
-    return {
-        message_key: tool_messages
-    }
+    if origin_node in {"fetch_jobright_jobs", "resolve_application_url", "perform_login"}:
+        # These state fields use replacement semantics, so include the existing
+        # transcript when appending the tool results.
+        return {message_key: [*messages, *tool_messages]}
+    return {message_key: tool_messages}
     
 
 
@@ -318,12 +294,13 @@ async def user_request_llm_node(state):
             tool_count=len(response.tool_calls),
         )
         return {
-            "user_request_phase": "NEEDS_TOOLS",
+            "user_node_decision": "NEEDS_TOOLS",
             "tool_call_origin": "user_request_llm_node",
             "messages": [response]
         }
 
     log_node_stage(node_name, "Agent response complete — producing routing decision")
+
     structured_messages = [
         {"role": "system", "content": load_prompt("chat_with_user/structured_system.txt")},
         *messages[1:],
@@ -341,64 +318,46 @@ async def user_request_llm_node(state):
         structured_model.ainvoke(structured_messages),
     )
 
-    if structured_response is None:
-        logger.warning("Structured model returned None for user request decision; falling back to CHAT")
-        structured_response = UserRequestRoutingDecision(next_step="CHAT")
-
     if response.content:
         print(response.content)
 
-    if structured_response.next_step == "FETCH_JOB_DESCRIPTION":
-        job_url = (
-            structured_response.fetch_job_description_decision.job_url.strip()
-            if structured_response.fetch_job_description_decision
-            else ""
-        )
+
+    decision = structured_response.decision
+
+    if decision.action == "CHAT":
         return {
             "messages": [response],
-            "user_request_phase": structured_response.next_step,
-            "job_url": job_url,
+            "user_node_decision": decision.action,
         }
 
-    if structured_response.next_step == "FETCH_JOBRIGHT_JOBS":
-        jobright_job_count = (
-            structured_response.fetch_jobright_jobs_decision.job_count
-            if structured_response.fetch_jobright_jobs_decision
-            else 5
-        )
+
+    if decision.action == "NEW_JOB_URL":
         return {
             "messages": [response],
-            "user_request_phase": structured_response.next_step,
-            "jobright_job_count": jobright_job_count,
+            "user_node_decision": decision.action,
+            "job_url": decision.job_url,
         }
 
-    if structured_response.next_step == "DISPATCH_JOBS":
-        job_query_filter = (
-            structured_response.dispatch_jobs_decision.job_query_filter
-            if structured_response.dispatch_jobs_decision and structured_response.dispatch_jobs_decision.job_query_filter
-            else JobQueryFilter(query="", n=1)
-        )
+    if decision.action == "FETCH_JOBRIGHT_JOBS":
         return {
             "messages": [response],
-            "user_request_phase": structured_response.next_step,
-            "job_query_filter": job_query_filter,
+            "user_node_decision": decision.action,
+            "jobright_job_count": decision.job_count,
+            "jobright_jobs": [],
+            "jobright_collection_messages": [],
+            "jobright_collection_job_number": 1,
+            "jobright_excluded_jobs": [],
         }
 
-    if structured_response.next_step == "CHAT":
+    if decision.action == "APPLY_FOR_JOBS":
         return {
             "messages": [response],
-            "user_request_phase": structured_response.next_step,
+            "user_node_decision": decision.action,
+            "job_query_filter": decision.job_query_filter.model_dump(),
         }
 
-    if structured_response.next_step == "END":
-        return {
-            "messages": [response],
-            "user_request_phase": structured_response.next_step,
-        }
 
-    logger.debug("Next action: %s", structured_response.next_step)
-
-
+    logger.debug("Next action: %s", decision.action)
 
 
 @trace_node
@@ -406,7 +365,11 @@ async def prepare_job_application_queue(state):
 
     job_query_filter = state["job_query_filter"]
     
-    tool_args = job_query_filter.model_dump()
+    tool_args = (
+        job_query_filter.model_dump()
+        if hasattr(job_query_filter, "model_dump")
+        else dict(job_query_filter)
+    )
     tool_args["filters"] = ["Not Applied"]
     log_workflow_event("loading application queue", **tool_args)
 
@@ -433,7 +396,7 @@ async def prepare_job_application_queue(state):
 
 
 @trace_node
-async def dispatch_next_job(state):
+async def dispath_job(state):
     application_queue = state.get("application_queue", [])
     if not application_queue:
         log_workflow_event("application queue exhausted", destination="collect_user_request")
@@ -458,89 +421,41 @@ async def dispatch_next_job(state):
         "current_job": current_job,
         "job_details": current_job,
         "job_url": job_url,
+        # Authentication and browser evidence are scoped to one queued job.
+        # Carrying them into the next job can otherwise suppress a real gate or
+        # revive a previous site's login transcript.
+        "actual_job_url": "",
+        "authenticated_session": False,
+        "resolve_application_url_messages": [],
+        "perform_login_messages": [],
         "application_queue": remaining_application_queue,
         "num_jobs_to_process": len(remaining_application_queue),
-        "has_next_job": True,
-        "is_valid": False,
-        "is_applied": False,
-        "is_duplicate": False,
-        "requires_login": False,
-        "requires_human": False,
-        "application_status": "",
-        "final_status_message": "",
-        "reason_for_not_applying": "",
-        "url_applied_on": "",
+        "has_next_job": len(remaining_application_queue) > 0,
     }
 
 
-async def _run_browser_agent(node_name: str, messages: list, max_steps: int = 100) -> list:
-    """Let the model complete a bounded browser task through Chrome MCP tools."""
-    model_with_tools = await get_custom_model_with_tools(["chrome"])
-    for step in range(max_steps):
-        step_num = step + 1
-        log_node_stage(
-            node_name,
-            f"Step {step_num}/{max_steps} — awaiting LLM decision ({len(messages)} message(s) in context)",
-        )
-        response = await await_with_progress(
-            node_name,
-            f"Browser agent step {step_num}/{max_steps} — model thinking",
-            model_with_tools.ainvoke(messages),
-        )
-        messages.append(response)
-        if not response.tool_calls:
-            log_node_stage(node_name, f"Step {step_num}/{max_steps} — finished (model returned no tool calls)")
-            return messages
+@trace_node
+async def fetch_jobright_jobs(state):
+    """Advance one Jobright collection turn; ``tool_node`` executes all tools."""
+    node_name = "fetch_jobright_jobs"
+    job_count = state.get("jobright_job_count", 5)
+    job_number = state.get("jobright_collection_job_number", 1)
 
-        log_node_stage(node_name, f"Step {step_num}/{max_steps} — received {len(response.tool_calls)} tool call(s)")
-        log_tool_calls(node_name, response.tool_calls)
-        for tool_idx, tool_call in enumerate(response.tool_calls, start=1):
-            tool_name = tool_call["name"]
-            tool = tools_by_name.get(tool_name)
-            if tool is None:
-                raise RuntimeError(f"The browser tool '{tool_name}' is unavailable.")
-            log_node_stage(
-                node_name,
-                f"Step {step_num}/{max_steps} [Tool {tool_idx}/{len(response.tool_calls)}] — calling '{tool_name}'",
-            )
-            tool_result = await await_with_progress(
-                node_name,
-                f"Running browser tool: {tool_name}",
-                tool.ainvoke(tool_call["args"]),
-                show_progress=False,
-            )
-            log_tool_result(node_name, tool_name, tool_result)
-            messages.append(
-                ToolMessage(
-                    content=tool_result,
-                    tool_call_id=tool_call["id"],
-                    name=tool_name,
-                )
-            )
-
-    raise RuntimeError(f"The browser agent did not finish the Jobright collection within {max_steps} steps.")
-
-
-async def collect_jobright_job(
-    job_number: int,
-    job_count: int,
-    excluded_jobs: list[dict[str, str]],
-) -> JobrightJob:
-    """Collect one eligible Jobright card and return its structured details."""
     if not 1 <= job_count <= 5:
         raise ValueError("Jobright job count must be between 1 and 5.")
     if not 1 <= job_number <= job_count:
-        raise ValueError("Jobright job number must be within the requested count.")
+        raise ValueError("Jobright collection job number must be within the requested count.")
 
-    excluded_jobs_text = format_recent_workbook_jobs_for_prompt(excluded_jobs)
-    node_name = "fetch_jobright_jobs"
-    log_node_stage(
-        node_name,
-        f"Starting browser agent session for Jobright job {job_number}/{job_count}",
-    )
-    browser_messages = await _run_browser_agent(
-        node_name,
-        [
+    workbook_path = Path(state["excel_file_path"])
+    jobright_jobs = list(state.get("jobright_jobs", []))
+    excluded_jobs = list(state.get("jobright_excluded_jobs", []))
+    collection_messages = list(state.get("jobright_collection_messages", []))
+
+    if not collection_messages:
+        if not excluded_jobs:
+            excluded_jobs = recent_workbook_job_summaries(workbook_path, limit=20)
+        excluded_jobs_text = format_recent_workbook_jobs_for_prompt(excluded_jobs)
+        collection_messages = [
             {
                 "role": "system",
                 "content": load_prompt(
@@ -560,102 +475,82 @@ async def collect_jobright_job(
                     excluded_jobs=excluded_jobs_text,
                 ),
             },
-        ],
-    )
-    log_node_stage(
+        ]
+
+    model_with_tools = await get_custom_model_with_tools(["chrome"])
+    response = await await_with_progress(
         node_name,
-        f"Browser session completed ({len(browser_messages)} messages). Extracting one structured job...",
+        f"Collecting Jobright job {job_number}/{job_count}",
+        model_with_tools.ainvoke(collection_messages),
     )
-    structured_model = get_custom_structured_model("jobright_job_model")
-    structured_messages = [
-        {
-            "role": "system",
-            "content": load_prompt(
-                "fetch_jobright_jobs/structured_system.txt",
-                job_number=job_number,
-                job_count=job_count,
-                excluded_jobs=excluded_jobs_text,
-            ),
-        },
-        *browser_messages[1:],
-        {
-            "role": "user",
-            "content": (
-                "Using only the browser evidence above, return one Jobright job "
-                "in the required structured format."
-            ),
-        },
-    ]
-    result = await await_with_progress(
-        node_name,
-        f"Agent is structuring Jobright job {job_number}/{job_count}",
-        structured_model.ainvoke(structured_messages),
-    )
-    if result is None:
-        raise RuntimeError("The browser agent did not return a Jobright job.")
-    log_node_stage(node_name, f"Successfully structured Jobright job {job_number}/{job_count}")
-    return result
-
-
-@trace_node
-async def fetch_jobright_jobs(state):
-    """Fetch the requested Jobright matches and persist unique workbook rows."""
-    node_name = "fetch_jobright_jobs"
-    job_count = state.get("jobright_job_count", 5)
-    log_node_stage(
-        node_name, f"Started — loading {job_count} Jobright recommendation(s)"
-    )
-
-    try:
-        workbook_path = Path(state["excel_file_path"])
-        excluded_jobs = recent_workbook_job_summaries(workbook_path, limit=20)
-        application_fields = {
-            "application_status", "status", "reason", *APPLICATION_METRIC_COLUMNS,
+    collection_messages.append(response)
+    if response.tool_calls:
+        log_tool_calls(node_name, response.tool_calls)
+        return {
+            "jobright_collection_messages": collection_messages,
+            "jobright_collection_job_number": job_number,
+            "jobright_excluded_jobs": excluded_jobs,
+            "jobright_jobs": jobright_jobs,
+            "tool_call_origin": node_name,
+            "next_step": "tool_node",
         }
-        jobright_jobs: list[dict[str, str]] = []
-        inserted = updated = 0
 
-        for job_number in range(1, job_count + 1):
-            job = await collect_jobright_job(
-                job_number, job_count, list(excluded_jobs)
-            )
-            row = workbook_rows_from_jobright_jobs([job], expected_count=1)[0]
-            action, _ = upsert_job_row(
-                workbook_path,
-                row,
-                preserve_existing=application_fields,
-            )
-            if action == "inserted":
-                inserted += 1
-            else:
-                updated += 1
-            job_data = job.model_dump()
-            jobright_jobs.append(job_data)
-            excluded_jobs.append(
-                {"companyName": job_data["companyName"], "title": job_data["title"]}
-            )
-            log_node_stage(
-                node_name,
-                f"Saved Jobright job {job_number}/{job_count} before collecting the next one",
-            )
+    excluded_jobs_text = format_recent_workbook_jobs_for_prompt(excluded_jobs)
+    structured_model = get_custom_structured_model("jobright_job_model")
+    job = await await_with_progress(
+        node_name,
+        f"Structuring Jobright job {job_number}/{job_count}",
+        structured_model.ainvoke([
+            {
+                "role": "system",
+                "content": load_prompt(
+                    "fetch_jobright_jobs/structured_system.txt",
+                    job_number=job_number,
+                    job_count=job_count,
+                    excluded_jobs=excluded_jobs_text,
+                ),
+            },
+            *collection_messages[1:],
+            {
+                "role": "user",
+                "content": "Using only the browser evidence above, return one Jobright job in the required structured format.",
+            },
+        ]),
+    )
+    if job is None:
+        raise RuntimeError("The browser agent did not return a Jobright job.")
 
-        message = (
-            f"Saved {len(jobright_jobs)} Jobright job(s) individually to the workbook "
-            f"({inserted} added, {updated} refreshed)."
-        )
-    except Exception as exc:
-        logger.warning("Could not fetch all Jobright recommendations: %s", exc)
-        saved_count = len(jobright_jobs) if "jobright_jobs" in locals() else 0
-        message = (
-            f"Stopped Jobright collection after saving {saved_count} job(s): {exc}"
-        )
-        jobright_jobs = jobright_jobs if "jobright_jobs" in locals() else []
+    write_result = persist_jobright_jobs(workbook_path, [job])
+    job_data = job.model_dump()
+    jobright_jobs.append(job_data)
+    excluded_jobs.append(
+        {"companyName": job_data["companyName"], "title": job_data["title"]}
+    )
+    log_node_stage(
+        node_name,
+        f"Saved Jobright job {job_number}/{job_count} ({write_result.inserted} added, {write_result.updated} refreshed)",
+    )
 
+    if job_number < job_count:
+        return {
+            "jobright_collection_messages": [],
+            "jobright_collection_job_number": job_number + 1,
+            "jobright_excluded_jobs": excluded_jobs,
+            "jobright_jobs": jobright_jobs,
+            "next_step": "fetch_jobright_jobs",
+        }
+
+    message = (
+        f"Saved {len(jobright_jobs)} Jobright job(s) to the workbook."
+    )
     log_node_stage(node_name, f"Completed — {message}")
-    print(message)
     return {
+        "jobright_collection_messages": [],
+        "jobright_collection_job_number": 1,
+        "jobright_excluded_jobs": excluded_jobs,
         "jobright_jobs": jobright_jobs,
         "messages": [{"role": "assistant", "content": message}],
+        "next_step": "collect_user_request",
     }
 
 
@@ -670,7 +565,7 @@ async def extract_job_details(state):
 
     # Defining model
     model_with_tools = await get_custom_model_with_tools(["chrome"])
-    structured_model = get_custom_structured_model("job_listing_model")
+    structured_model = get_custom_structured_model("job_details_model")
 
     # Getting the arguments
     job_url = state['job_url']
@@ -726,16 +621,36 @@ def save_job_to_workbook(state):
     # Getting the arguments
     job_details = state["job_details"]
     excel_file_path = state["excel_file_path"]
-    job_dict = job_details.model_dump() if hasattr(job_details, "model_dump") else dict(job_details)
-    job_dict["link"] = job_dict.get("link") or state.get("job_url", "")
-    job_dict["applyUrl"] = job_dict.get("applyUrl") or state.get("actual_job_url", "")
+    if hasattr(job_details, "model_dump"):
+        model_fields = set(type(job_details).model_fields)
+        job_dict = job_details.model_dump(exclude_none=True)
+    else:
+        # Non-Pydantic values are supported for graph state restoration and
+        # tests. Their supplied keys are the only fields eligible for writing.
+        job_dict = dict(job_details)
+        model_fields = set(job_dict)
 
-    row = {column: job_dict.get(column, "") or "" for column in JOB_COLUMNS}
-    row["id"] = canonical_job_id(job_dict)
+    # Do not manufacture blank legacy fields: only fields defined by the
+    # current JobDetails model and supported by the workbook schema are saved.
+    row = {
+        field: value
+        for field, value in job_dict.items()
+        if field in model_fields and field in JOB_COLUMNS
+    }
+
+    # ``id`` is workflow metadata, not extracted job detail. Use the supplied
+    # URL only for identity generation; do not write it as ``link`` unless the
+    # Pydantic model itself defines that field.
+    identity_record = {
+        **row,
+        "link": job_dict.get("link") or state.get("job_url", ""),
+        "applyUrl": row.get("applyUrl") or state.get("actual_job_url", ""),
+    }
+    row["id"] = canonical_job_id(identity_record)
     if not row["id"]:
         raise ValueError("Cannot save a user-supplied job without a stable job URL or ID.")
-    row["application_status"] = row["application_status"] or "Not Applied"
-    row["fetched_at"] = row["fetched_at"] or pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+    row["application_status"] = "Not Applied"
+    row["fetched_at"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     for column in APPLICATION_METRIC_COLUMNS:
         row[column] = ""
 
@@ -762,7 +677,7 @@ def build_validation_messages(state):
     )
 
     return {
-        "validate_job_listing_messages" : [
+        "is_job_valid_messages" : [
             {'role': 'system', 'content': load_prompt("job_verifier/system.txt")},
             {'role':'user', 'content': load_prompt("job_verifier/user.txt", job_url = job_url)}
         ]
@@ -770,9 +685,9 @@ def build_validation_messages(state):
         
     
 @trace_node
-async def validate_job_listing(state):
+async def is_job_valid(state):
     # Logging
-    node_name = "validate_job_listing"
+    node_name = "is_job_valid"
     log_node_stage(node_name, "Started — connecting to browser tools")
 
 
@@ -780,7 +695,7 @@ async def validate_job_listing(state):
     model_with_tools = await get_custom_model_with_tools(["chrome"])
     structured_model = get_custom_structured_model("job_validation_model")
 
-    messages = state["validate_job_listing_messages"]
+    messages = state["is_job_valid_messages"]
 
     response = await await_with_progress(
         node_name,
@@ -791,8 +706,8 @@ async def validate_job_listing(state):
     if response.tool_calls:
         return {
             "validation_phase": "NEEDS_TOOLS",
-            "tool_call_origin": "validate_job_listing",
-            "validate_job_listing_messages": [response]
+            "tool_call_origin": "is_job_valid",
+            "is_job_valid_messages": [response]
         }
 
     log_node_stage(node_name, "Completed — evaluating job eligibility")
@@ -814,77 +729,104 @@ async def validate_job_listing(state):
     )
     logger.debug("Final response: %s", structured_response)
 
+    decision = structured_response.decision
     return {
-        "validation_phase": "ELIGIBLE" if structured_response.is_valid else "NOT_ELIGIBLE",
-        "reason_for_not_applying": structured_response.reason_for_not_applying,
-        "final_status_message": structured_response.reason_for_not_applying,
+        "validation_phase": "ELIGIBLE" if decision.valid_job == "YES" else "NOT_ELIGIBLE",
+        "invalid_job_reason": getattr(decision, "invalid_job_reason", ""),
         "is_applied": False,
     }
 
 @trace_node
-def build_application_url_messages(state):
-
-    job_url = state.get("job_url")
-
-    return {
-        "resolve_application_url_messages" : [
-            {'role': 'system', 'content': load_prompt("navigate_to_application/system.txt")},
-            {'role':'user', 'content': load_prompt("navigate_to_application/user.txt", job_url = job_url)}
-        ]
-    }
-
-
-
-@trace_node
 async def resolve_application_url(state):
-    # Logging
+    """Resolve the selected job's application URL without authenticating it."""
     node_name = "resolve_application_url"
-    log_node_stage(node_name, "Started — locating the application page")
+    log_node_stage(node_name, "Started — resolving the application URL")
 
-    # Defining model with tools
+    saved_messages = state.get("resolve_application_url_messages")
+    authenticated_session = state.get("authenticated_session", False)
+    target_url = (
+        state.get("actual_job_url")
+        if authenticated_session and state.get("actual_job_url")
+        else state.get("job_url", "")
+    )
+    initial_messages = [
+        {"role": "system", "content": load_prompt("resolve_application_url/system.txt")},
+        {
+            "role": "user",
+            "content": load_prompt(
+                "resolve_application_url/user.txt",
+                job_url=target_url,
+            ),
+        },
+    ]
+    # A completed login is authoritative state from the preceding node. Do not
+    # reuse the transcript that captured the original login gate.
+    messages = (
+        [
+            *initial_messages,
+            {
+                "role": "user",
+                "content": (
+                    "The dedicated login node has just verified an authenticated "
+                    "session at this URL. Inspect the current page and determine "
+                    "whether the application form is accessible. Do not set "
+                    "requires_login=true unless fresh browser evidence proves a "
+                    "different active authentication gate is blocking the form."
+                ),
+            },
+        ]
+        # perform_login clears this field once on success. Start one fresh,
+        # authenticated resolver transcript at that point, but preserve it on
+        # every following tool turn; rebuilding it each turn loses the tool
+        # result and causes the model to call list_pages forever.
+        if authenticated_session and not saved_messages
+        else (saved_messages or initial_messages)
+    )
     model_with_tools = await get_custom_model_with_tools(["chrome"])
-    structured_model = get_custom_structured_model("application_access_model")
-
-    messages = state["resolve_application_url_messages"]
-
+    structured_model = get_custom_structured_model("application_url_resolution_model")
 
     response = await await_with_progress(
         node_name,
-        "Agent is finding the application page",
+        "Agent is resolving the application URL",
         model_with_tools.ainvoke(messages),
     )
 
     if response.tool_calls:
+        # On the first browser turn these prompts only exist in this local
+        # variable. Persist them with the assistant's tool request so the
+        # next turn is a valid conversation: system, user, assistant(tool
+        # call), tool result. Returning only ``response`` left the persisted
+        # transcript starting with an assistant message, which the provider
+        # correctly rejects as an illegal messages payload.
+        transcript_update = [*messages, response]
         return {
-            "next_step": "tool_node",
+            "resolution_phase": "NEEDS_TOOLS",
             "tool_call_origin": "resolve_application_url",
-            "resolve_application_url_messages": [response]
+            "resolve_application_url_messages": transcript_update,
         }
-        
-    log_node_stage(node_name, "Completed — checking login requirement")
+
+    log_node_stage(node_name, "Completed — evaluating the application URL")
     structured_messages = [
-        {"role": "system", "content": load_prompt("navigate_to_application/structured_system.txt")},
+        {"role": "system", "content": load_prompt("resolve_application_url/structured_system.txt")},
         *messages[1:],
         response,
         {
             "role": "user",
-            "content": (
-                "Based on the browsing evidence above, you MUST return the structured output evaluation now."
-            ),
+            "content": "Based on the browsing evidence above, you MUST return the structured output now.",
         },
     ]
     structured_response = await await_with_progress(
         node_name,
-        "Agent is checking whether sign-in is required",
+        "Agent is evaluating the resolved application URL",
         structured_model.ainvoke(structured_messages),
     )
 
     retry = 3
     while structured_response is None and retry > 0:
-        print("Re-running structured model for login check")
+        print("Re-running structured model for application URL resolution")
         structured_response = await await_with_progress(
             node_name,
-            "Agent is checking whether sign-in is required",
+            "Agent is evaluating the resolved application URL",
             structured_model.ainvoke(structured_messages),
         )
         retry -= 1
@@ -893,40 +835,60 @@ async def resolve_application_url(state):
         raise ValueError("Model didn't produce the structured output")
 
     logger.debug("Final response: %s", structured_response)
+    if structured_response.requires_login:
+        if authenticated_session:
+            # Never route a known-authenticated session back through the same
+            # login node. A different fresh gate needs human review instead.
+            return {
+                "resolution_phase": "FAILED",
+                "actual_job_url": structured_response.actual_job_url,
+                "requires_human": True,
+                "human_intervention_reason": "OTHER",
+                "human_intervention_prompt": (
+                    "The application still reports an authentication gate after "
+                    "a successful sign-in. Review the current page manually."
+                ),
+                "human_intervention_origin": "resolve_application_url",
+            }
+        return {
+            "resolution_phase": "REQUIRES_LOGIN",
+            "actual_job_url": structured_response.actual_job_url,
+            "login_return_node": "resolve_application_url",
+        }
 
     return {
-        "next_step": "intermediate_node_for_submit_job_application",
-        "requires_login": structured_response.requires_login,
+        "resolution_phase": "SUCCESS" if structured_response.ready_to_apply else "FAILED",
         "actual_job_url": structured_response.actual_job_url,
-        "resolve_application_url_messages":  [structured_response.message]
-    }
-
-
-
-@trace_node
-def build_authenticate_with_job_site_messages(state):
-
-    job_url = state.get("actual_job_url")
-
-    return {
-        "authenticate_with_job_site_messages" : [
-            {'role': 'system', 'content': load_prompt("perform_login/system.txt")},
-            {'role':'user', 'content': load_prompt("perform_login/user.txt", job_url = job_url)}
-        ]
+        "submit_job_application_messages": (
+            [
+                {
+                    "role": "user",
+                    "content": f"The Actual Job URL is : {structured_response.actual_job_url}\n",
+                }
+            ]
+            if structured_response.ready_to_apply
+            else []
+        ),
     }
 
 
 @trace_node
-async def authenticate_with_job_site(state):
-    # Logging
-    node_name = "authenticate_with_job_site"
+async def perform_login(state):
+    """Authenticate the current application page, then return to its caller."""
+    node_name = "perform_login"
     log_node_stage(node_name, "Started — signing in to the application site")
 
-    # Defining model with tools
+    saved_messages = state.get("perform_login_messages")
+    target_url = state.get("actual_job_url") or state.get("job_url", "")
+    messages = saved_messages or [
+        {"role": "system", "content": load_prompt("perform_login/system.txt")},
+        {
+            "role": "user",
+            "content": load_prompt("perform_login/user.txt", job_url=target_url),
+        },
+    ]
     model_with_tools = await get_custom_model_with_tools(["chrome", "gmail"])
     structured_model = get_custom_structured_model("authentication_model")
-
-    messages = state["authenticate_with_job_site_messages"]
 
     response = await await_with_progress(
         node_name,
@@ -935,10 +897,11 @@ async def authenticate_with_job_site(state):
     )
 
     if response.tool_calls:
+        transcript_update = [*messages, response]
         return {
-            "next_step": "tool_node",
-            "tool_call_origin": "authenticate_with_job_site",
-            "authenticate_with_job_site_messages": [response]
+            "login_phase": "NEEDS_TOOLS",
+            "tool_call_origin": "perform_login",
+            "perform_login_messages": transcript_update,
         }
 
     log_node_stage(node_name, "Completed — evaluating authentication")
@@ -948,9 +911,7 @@ async def authenticate_with_job_site(state):
         response,
         {
             "role": "user",
-            "content": (
-                "Based on the browsing evidence above, you MUST return the structured output evaluation now."
-            ),
+            "content": "Based on the browsing evidence above, you MUST return the structured output evaluation now.",
         },
     ]
     structured_response = await await_with_progress(
@@ -958,31 +919,29 @@ async def authenticate_with_job_site(state):
         "Agent is evaluating authentication",
         structured_model.ainvoke(structured_messages),
     )
-    logger.debug("Final response: %s", structured_response)
+    logger.debug("Login result: %s", structured_response)
 
-    next_step = "submit_job_application" if structured_response.is_logged_in else "update_job_status"
+    if structured_response.is_logged_in:
+        return {
+            "login_phase": "SUCCESS",
+            "actual_job_url": structured_response.logged_in_url,
+            "authenticated_session": True,
+            # The next resolver pass must use fresh authenticated evidence.
+            "resolve_application_url_messages": [],
+            "perform_login_messages": [],
+            "requires_human": False,
+            "human_intervention_reason": None,
+            "human_intervention_prompt": "",
+            "human_intervention_origin": "",
+        }
+
     return {
-        "next_step": next_step,
-        "is_logged_in": structured_response.is_logged_in,
-        "logged_in_url": structured_response.logged_in_url,
-        "final_status_message": (
-            "" if structured_response.is_logged_in
-            else "Unable to sign in to the application site."
-        ),
-        "authenticate_with_job_site_messages": [structured_response.message]
-    }
-
-
-@trace_node
-async def intermediate_node_for_submit_job_application(state):
-    job_url = state["actual_job_url"]
-    return {
-        'submit_job_application_messages': [
-            {
-                "role": "user",
-                "content": f"The Actual Job URL is : {job_url}\n"
-            }
-        ]
+        "login_phase": "FAILED",
+        "actual_job_url": structured_response.logged_in_url,
+        "requires_human": True,
+        "human_intervention_reason": "OTHER",
+        "human_intervention_prompt": structured_response.message or "Complete the sign-in on the current application page.",
+        "human_intervention_origin": "perform_login",
     }
 
 @trace_node
@@ -993,7 +952,7 @@ async def submit_job_application(state):
     messages = state['submit_job_application_messages']
 
     model_with_tools = await get_custom_model_with_tools(["chrome"])
-    structured_application_model = get_custom_structured_model("application_model")
+    structured_job_application_model = get_custom_structured_model("job_application_model")
 
     response = await await_with_progress(
         node_name,
@@ -1003,7 +962,7 @@ async def submit_job_application(state):
 
     if response.tool_calls:
         return {
-            "next_step": "tool_node",
+            "job_application_phase": "NEEDS_TOOLS",
             "tool_call_origin": "submit_job_application",
             "submit_job_application_messages" : [response]
         }    
@@ -1023,33 +982,52 @@ async def submit_job_application(state):
     structured_response = await await_with_progress(
         node_name,
         "Agent is recording the application result",
-        structured_application_model.ainvoke(structured_messages),
+        structured_job_application_model.ainvoke(structured_messages),
     )
     logger.debug("Final response: %s", structured_response)
 
-    if structured_response.requires_human:
-        application_status = (
-            "Needs CAPTCHA"
-            if structured_response.human_intervention_reason == "CAPTCHA"
-            else "In Progress"
-        )
-        next_step = "update_job_status"
-    else:
-        application_status = ""
-        next_step = "build_verify_job_status_messages"
     
+    application_result = structured_response.decision
+
+    if application_result.is_applied:
+        return {
+            "job_application_phase": "APPLIED",
+            "is_applied": True,
+            "url_applied_on": application_result.url_applied_on,
+            "final_status_message": application_result.final_status_message,
+            "requires_human": False,
+            "human_intervention_reason": None,
+            "human_intervention_prompt": "",
+            "human_intervention_origin": "",
+            "submit_job_application_messages": [response],
+        }
+
+    if application_result.requires_login:
+        return {
+            "job_application_phase": "REQUIRES_LOGIN",
+            "is_applied": False,
+            "requires_human": False,
+            "human_intervention_reason": None,
+            "human_intervention_prompt": "",
+            "human_intervention_origin": "",
+            "login_return_node": "submit_job_application",
+        }
+
+    # The unsuccessful branch owns the human-intervention fields. It does not
+    # provide confirmation metadata, so reset those fields rather than reading
+    # attributes that are absent from ApplicationNotAppliedSubModel.
     return {
-        "next_step": next_step,
-        "is_applied": structured_response.is_applied,
-        "url_applied_on": structured_response.url_applied_on,
-        "final_status_message": structured_response.final_status_message,
-        "is_duplicate": structured_response.is_duplicate,
-        "requires_human": structured_response.requires_human,
-        "human_intervention_reason": structured_response.human_intervention_reason,
-        "human_intervention_prompt": structured_response.human_intervention_prompt,
-        "human_intervention_origin": "submit_job_application",
-        "application_status": application_status,
-        "submit_job_application_messages" : [response]
+        "job_application_phase": "NOT_APPLIED",
+        "is_applied": False,
+        "url_applied_on": "",
+        "final_status_message": "Application was not submitted.",
+        "requires_human": application_result.requires_human,
+        "human_intervention_reason": application_result.human_intervention_reason,
+        "human_intervention_prompt": application_result.human_intervention_prompt or "",
+        "human_intervention_origin": (
+            "submit_job_application" if application_result.requires_human else ""
+        ),
+        "submit_job_application_messages": [response],
     }
 
 
@@ -1139,7 +1117,7 @@ async def update_job_status(state):
     verified_status = state.get("application_status", "").strip()
     if verified_status:
         application_status = verified_status
-    elif state.get("is_applied") or state.get("is_duplicate"):
+    elif state.get("is_applied"):
         application_status = "Applied"
     else:
         application_status = "Not Applied"
@@ -1185,5 +1163,8 @@ async def human_in_the_loop(state):
     
     return {
         "next_step": state['human_intervention_origin'],
-        "requires_human": False
+        "requires_human": False,
+        "human_intervention_reason": "",
+        "human_intervention_prompt": "",
+        "human_intervention_origin": "",
     }

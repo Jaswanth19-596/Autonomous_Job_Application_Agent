@@ -1,5 +1,7 @@
 import asyncio
+import json
 from contextlib import asynccontextmanager
+from subprocess import DEVNULL, Popen
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
@@ -7,6 +9,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 import os
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 from dotenv import load_dotenv
 from google_auth_oauthlib.flow import InstalledAppFlow
 from mcp import types
@@ -14,6 +18,19 @@ from mcp import types
 load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CHROME_BINARY = Path(
+    os.getenv(
+        "JOB_AGENT_CHROME_BINARY",
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    )
+)
+# Keep the agent's DevTools instance separate from normal Chrome and any other
+# local automation that may use Chrome's conventional debugging port.
+CHROME_DEBUG_PORT = int(os.getenv("JOB_AGENT_CHROME_PORT", "9223"))
+CHROME_DEBUG_URL = f"http://127.0.0.1:{CHROME_DEBUG_PORT}"
+CHROME_DEBUG_PROFILE = Path(
+    os.getenv("JOB_AGENT_CHROME_PROFILE", str(Path.home() / "chrome-debug-profile"))
+)
 
 
 async def list_workspace_roots(_: object) -> types.ListRootsResult:
@@ -74,7 +91,7 @@ SERVERS = {
             "args": [
                 "-y",
                 "chrome-devtools-mcp@latest",
-                "--browserUrl=http://127.0.0.1:9222",
+                f"--browserUrl={CHROME_DEBUG_URL}",
                 "--screenshot-format=jpeg",
                 "--screenshot-quality=50",
                 "--screenshot-max-width=1280",
@@ -83,6 +100,51 @@ SERVERS = {
             ],
         },
 }
+
+
+def _chrome_debugger_is_ready() -> bool:
+    """Return whether the configured endpoint is a Chrome DevTools server."""
+    try:
+        with urlopen(f"{CHROME_DEBUG_URL}/json/version", timeout=1) as response:
+            payload = json.load(response)
+    except (OSError, URLError, ValueError, json.JSONDecodeError):
+        return False
+    return bool(payload.get("webSocketDebuggerUrl"))
+
+
+async def ensure_chrome_debugger() -> None:
+    """Start the dedicated Chrome profile and wait until DevTools is reachable."""
+    if await asyncio.to_thread(_chrome_debugger_is_ready):
+        return
+
+    if not CHROME_BINARY.is_file():
+        raise RuntimeError(
+            f"Google Chrome was not found at {CHROME_BINARY}. "
+            "Set JOB_AGENT_CHROME_BINARY to its executable path."
+        )
+
+    CHROME_DEBUG_PROFILE.mkdir(parents=True, exist_ok=True)
+    Popen(
+        [
+            str(CHROME_BINARY),
+            "--remote-debugging-address=127.0.0.1",
+            f"--remote-debugging-port={CHROME_DEBUG_PORT}",
+            f"--user-data-dir={CHROME_DEBUG_PROFILE}",
+        ],
+        stdout=DEVNULL,
+        stderr=DEVNULL,
+        start_new_session=True,
+    )
+
+    for _ in range(20):
+        if await asyncio.to_thread(_chrome_debugger_is_ready):
+            return
+        await asyncio.sleep(0.5)
+
+    raise RuntimeError(
+        f"Chrome did not expose DevTools at {CHROME_DEBUG_URL}/json/version. "
+        f"Port {CHROME_DEBUG_PORT} may be in use by another process."
+    )
 
 
 def get_gmail_server_config():
@@ -150,6 +212,7 @@ class MCPManager:
 
     async def _ensure_chrome_session(self):
         if self._chrome_task is None:
+            await ensure_chrome_debugger()
             self._chrome_ready = asyncio.Event()
             self._chrome_stop = asyncio.Event()
             self._chrome_error = None
@@ -160,6 +223,28 @@ class MCPManager:
         await self._chrome_ready.wait()
         if self._chrome_error is not None:
             await self._chrome_task
+
+    async def _stop_chrome_session(self):
+        """Close a stale Chrome MCP session without disturbing Gmail."""
+        task = self._chrome_task
+        stop_event = self._chrome_stop
+        if task is None or stop_event is None:
+            return
+
+        stop_event.set()
+        try:
+            await task
+        except BaseException:
+            # A broken browser session is being replaced, so its shutdown
+            # exception is not useful to callers.
+            pass
+        finally:
+            self.chrome_tools = []
+            self.chrome_session = None
+            self._chrome_task = None
+            self._chrome_ready = None
+            self._chrome_stop = None
+            self._chrome_error = None
 
     async def _ensure_gmail_session(self):
         if self._gmail_task is None:
@@ -176,8 +261,13 @@ class MCPManager:
 
     async def start(self, servers_to_use: list[str]) -> list:
         """Start requested persistent sessions in manager-owned tasks."""
-        if "chrome" in servers_to_use and self.chrome_session is None:
-            await self._ensure_chrome_session()
+        if "chrome" in servers_to_use:
+            if self.chrome_session is not None and not await asyncio.to_thread(
+                _chrome_debugger_is_ready
+            ):
+                await self._stop_chrome_session()
+            if self.chrome_session is None:
+                await self._ensure_chrome_session()
 
         if "gmail" in servers_to_use and self.gmail_session is None:
             self.mcp_client.connections["gmail"] = get_gmail_server_config()

@@ -4,10 +4,9 @@ Role: You record the result of a job application attempt.
 Review the application submission actions, form responses, and confirmation pages in the conversation to return an accurate `ApplicationResult`.
 
 # Field Rules
-- `is_applied`: Set to `true` ONLY if the application was successfully submitted. Set to `false` otherwise.
-- `final_status_message`: A concise summary of the application outcome (e.g., "Application submitted successfully" or the specific reason for failure).
-- `is_duplicate`: Set to `true` if the page indicated that this job was already applied to in the past.
-- `url_applied_on`: The URL of the confirmation page or final submitted page.
-- `requires_human_data`: Always return a `RequiresHuman` object. Set `requires_human_data.requires_human` to `true` only if a CAPTCHA, MFA, or another required human action is actively blocking submission; otherwise set it to `false`.
-- `requires_human_data.human_intervention_reason`: Set to `"CAPTCHA"` if blocked by a CAPTCHA, `"OTHER"` if blocked by another human-only challenge, or `null` when `requires_human_data.requires_human` is `false`.
-- `requires_human_data.human_intervention_prompt`: Provide concise, actionable instructions for the human user when `requires_human_data.requires_human` is `true`; otherwise set it to `""`.
+- Return one top-level `decision` object.
+- `decision.is_applied`: Set to `true` ONLY if the application was successfully submitted. Set to `false` otherwise.
+- When `decision.is_applied` is `true`, return only `final_status_message` and `url_applied_on`. `url_applied_on` must be the confirmation page or final submitted page. Do not return any human-intervention fields.
+- When `decision.is_applied` is `false`, return `requires_login`, `requires_human`, `human_intervention_reason`, and `human_intervention_prompt`. Set `requires_login` to `true` only when a normal sign-in, account-creation, or required SSO gate is blocking submission; then set `requires_human` to `false`, `human_intervention_reason` to null, and `human_intervention_prompt` to an empty string. Set `requires_human` to `true` only if a CAPTCHA, MFA, passkey, or another required human action is actively blocking submission; then set `requires_login` to `false`. Otherwise set both flags to `false`. Do not return success fields.
+- For the unsuccessful branch, set `human_intervention_reason` to `"CAPTCHA"` for a CAPTCHA, `"OTHER"` for another human-only challenge, or `null` when `requires_human` is `false`.
+- For the unsuccessful branch, provide a concise, actionable `human_intervention_prompt` only when `requires_human` is `true`; otherwise return `""`.

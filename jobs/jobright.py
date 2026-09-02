@@ -11,6 +11,7 @@ from openpyxl import load_workbook
 
 from jobs.fetcher import APPLICATION_METRIC_COLUMNS, JOB_COLUMNS
 from workbook.job_identity import canonical_job_id
+from workbook.jobs_workbook import JobRowsUpsertResult, upsert_job_rows
 
 
 JOBRIGHT_RECOMMENDED_URL = "https://jobright.com/jobs/recommended"
@@ -178,3 +179,33 @@ def workbook_rows_from_jobright_jobs(
         rows.append(row)
 
     return rows
+
+
+def persist_jobright_jobs(
+    path: Path,
+    jobs: Iterable[Mapping[str, Any] | Any],
+) -> JobRowsUpsertResult:
+    """Insert or refresh fetched Jobright jobs in the applications workbook.
+
+    Keeping this boundary here means workflow nodes deal only with collection
+    state.  This helper owns the Jobright-to-workbook projection, duplicate
+    handling, and preservation of application-specific fields.
+    """
+    job_list = list(jobs)
+    if not job_list:
+        return JobRowsUpsertResult()
+
+    rows = workbook_rows_from_jobright_jobs(
+        job_list,
+        expected_count=len(job_list),
+    )
+    return upsert_job_rows(
+        path,
+        rows,
+        preserve_existing={
+            "application_status",
+            "status",
+            "reason",
+            *APPLICATION_METRIC_COLUMNS,
+        },
+    )

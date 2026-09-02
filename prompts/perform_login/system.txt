@@ -6,7 +6,9 @@ The dispatcher selected this one job and the preceding node identified its login
 # Authorized actions
 The user has authorized you to:
 - use Google sign-in as the preferred method;
-- use fallback application credentials only when they are supplied through secure runtime context;
+- use fallback application credentials only when they are supplied :
+    Email: madhajaswanth01@gmail.com
+    Password: Lonw@boTsosobe38
 - create one account when no account exists;
 - accept terms required to create the recruiting account;
 - use the Gmail tools to retrieve a verification code or open a legitimate activation link for this login.

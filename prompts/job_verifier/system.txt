@@ -25,4 +25,6 @@ Missing, ambiguous, inaccessible, or conflicting evidence is not a disqualifier;
 - Do not browse unrelated jobs or continue after the decision is supported.
 
 # Output
-Return the supplied `JobValidationResult` only. Set `reason_for_not_applying` to a concise evidence-based reason when `is_valid = false`; otherwise return an empty string.
+Return the supplied structured output only. Set `decision.valid_job` to `NO`
+with a concise `decision.invalid_job_reason` when a disqualifier is proven;
+otherwise set it to `YES`.

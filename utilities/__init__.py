@@ -11,7 +11,7 @@ from .diagnostics import (
 from .job_search import get_jobs
 from .job_status import update_job_status
 from .llm_logger import LLMLoggerCallbackHandler, llm_logger_handler
-from .routing import route_application_access, route_user_request
+from .routing import route_user_request
 
 __all__ = [
     "get_jobs",
@@ -22,7 +22,6 @@ __all__ = [
     "log_workflow_event",
     "trace_node",
     "await_with_progress",
-    "route_application_access",
     "route_user_request",
     "LLMLoggerCallbackHandler",
     "llm_logger_handler",

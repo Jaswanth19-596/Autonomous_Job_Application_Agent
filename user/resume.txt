@@ -1,5 +1,5 @@
 JASWANTH MADA
-Hammond, IN | 219-466-5564 | madhajaswanth@gmail.com | Linkedin | Github | Portfolio
+Hammond, IN | 219-466-5564 | madhajaswanth01@gmail.com | Linkedin | Github | Portfolio
 SUMMARY
 Applied AI / Machine Learning Engineer specializing in multi-agent orchestration, production RAG pipelines, and LLM application
 development.
