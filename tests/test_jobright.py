@@ -7,10 +7,16 @@ from openpyxl import Workbook, load_workbook
 
 from jobs.fetcher import JOB_COLUMNS
 from jobs.jobright import (
+    persist_jobright_jobs,
     recent_workbook_job_summaries,
     workbook_rows_from_jobright_jobs,
 )
-from models import JobrightJob
+from models import ApplicationUrlResolution, AuthenticationResult, JobrightJob
+from models.schemas import (
+    ApplicationAppliedSubModel,
+    ApplicationNotAppliedSubModel,
+    ApplicationResult,
+)
 import nodes
 from prompts import load_prompt
 from workbook.jobs_workbook import upsert_job_rows
@@ -176,17 +182,458 @@ class JobrightPromptTests(unittest.TestCase):
             finally:
                 saved.close()
 
+    def test_persist_jobright_jobs_owns_the_workbook_write(self):
+        job = {
+            "rank": 1,
+            "link": "https://jobright.com/jobs/info/job-1",
+            "applyUrl": "https://jobs.example.com/openings/1",
+            "title": "Role 1",
+            "companyName": "Company 1",
+        }
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "jobs.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Applications"
+            sheet.append(JOB_COLUMNS)
+            workbook.save(path)
+
+            result = persist_jobright_jobs(path, [job])
+
+            self.assertEqual(result.inserted, 1)
+            saved = load_workbook(path, read_only=True)
+            try:
+                self.assertEqual(saved["Applications"].max_row, 2)
+            finally:
+                saved.close()
+
 
 class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
-    async def test_the_llm_executes_browser_tools_until_it_finishes(self):
-        tool_call = {"name": "navigate_page", "args": {"url": "https://jobright.com"}, "id": "call-1"}
-        model = AsyncMock()
-        model.ainvoke.side_effect = [
+    async def test_dispatch_resets_authentication_state_for_the_next_job(self):
+        result = await nodes.dispath_job(
+            {
+                "application_queue": [
+                    {"id": "job-2", "applyUrl": "https://jobs.example.com/apply/2"}
+                ],
+                "authenticated_session": True,
+                "actual_job_url": "https://jobs.example.com/apply/1",
+                "resolve_application_url_messages": [
+                    {"role": "user", "content": "Old login evidence."}
+                ],
+                "perform_login_messages": [
+                    {"role": "user", "content": "Old login evidence."}
+                ],
+            }
+        )
+
+        self.assertEqual(result["job_url"], "https://jobs.example.com/apply/2")
+        self.assertFalse(result["authenticated_session"])
+        self.assertEqual(result["actual_job_url"], "")
+        self.assertEqual(result["resolve_application_url_messages"], [])
+        self.assertEqual(result["perform_login_messages"], [])
+
+    async def test_submission_node_records_the_successful_application_branch(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationResult(
+            decision=ApplicationAppliedSubModel(
+                final_status_message="Application submitted successfully.",
+                url_applied_on="https://jobs.example.com/confirmation/123",
+            )
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=browser_model,
+            ),
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.submit_job_application(
+                {"submit_job_application_messages": [{"role": "user", "content": "Apply."}]}
+            )
+
+        self.assertEqual(result["job_application_phase"], "APPLIED")
+        self.assertTrue(result["is_applied"])
+        self.assertEqual(result["url_applied_on"], "https://jobs.example.com/confirmation/123")
+        self.assertFalse(result["requires_human"])
+
+    async def test_submission_node_records_the_unsuccessful_human_branch(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationResult(
+            decision=ApplicationNotAppliedSubModel(
+                requires_human=True,
+                human_intervention_reason="CAPTCHA",
+                human_intervention_prompt="Complete the CAPTCHA on the application page.",
+            )
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=browser_model,
+            ),
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.submit_job_application(
+                {"submit_job_application_messages": [{"role": "user", "content": "Apply."}]}
+            )
+
+        self.assertEqual(result["job_application_phase"], "NOT_APPLIED")
+        self.assertFalse(result["is_applied"])
+        self.assertTrue(result["requires_human"])
+        self.assertEqual(result["human_intervention_reason"], "CAPTCHA")
+        self.assertEqual(
+            result["human_intervention_prompt"],
+            "Complete the CAPTCHA on the application page.",
+        )
+
+    def test_application_result_is_discriminated_by_is_applied(self):
+        applied = ApplicationResult.model_validate(
+            {
+                "decision": {
+                    "is_applied": True,
+                    "final_status_message": "Application submitted successfully.",
+                    "url_applied_on": "https://jobs.example.com/confirmation/123",
+                }
+            }
+        )
+        not_applied = ApplicationResult.model_validate(
+            {
+                "decision": {
+                    "is_applied": False,
+                    "requires_human": False,
+                    "human_intervention_reason": None,
+                    "human_intervention_prompt": "",
+                }
+            }
+        )
+
+        self.assertIsInstance(applied.decision, ApplicationAppliedSubModel)
+        self.assertIsInstance(not_applied.decision, ApplicationNotAppliedSubModel)
+
+    async def test_resolution_node_hands_the_ready_url_to_the_submission_node(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationUrlResolution(
+            ready_to_apply=True,
+            actual_job_url="https://jobs.example.com/apply/123",
+            message="Application form is ready after sign-in.",
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=browser_model,
+            ) as get_model,
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.resolve_application_url(
+                {"job_url": "https://jobs.example.com/posting/123"}
+            )
+
+        get_model.assert_awaited_once_with(["chrome"])
+        self.assertEqual(result["resolution_phase"], "SUCCESS")
+        self.assertEqual(result["actual_job_url"], "https://jobs.example.com/apply/123")
+        self.assertEqual(
+            result["submit_job_application_messages"][0]["content"],
+            "The Actual Job URL is : https://jobs.example.com/apply/123\n",
+        )
+
+    async def test_resolution_node_routes_browser_calls_to_the_shared_tool_node(self):
+        tool_call = {"name": "list_pages", "args": {}, "id": "call-1"}
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": [tool_call]})()
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=browser_model,
+            ),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.resolve_application_url(
+                {"job_url": "https://jobs.example.com/posting/123"}
+            )
+
+        self.assertEqual(result["resolution_phase"], "NEEDS_TOOLS")
+        self.assertEqual(result["tool_call_origin"], "resolve_application_url")
+        self.assertEqual(len(result["resolve_application_url_messages"]), 3)
+        self.assertEqual(
+            result["resolve_application_url_messages"][0]["role"], "system"
+        )
+        self.assertEqual(
+            result["resolve_application_url_messages"][-1].tool_calls,
+            [tool_call],
+        )
+
+    async def test_resolution_node_records_a_blocked_login_without_submitting(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationUrlResolution(
+            ready_to_apply=False,
+            actual_job_url="https://jobs.example.com/login",
+            message="Sign-in was blocked by a CAPTCHA.",
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=browser_model,
+            ),
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.resolve_application_url(
+                {"job_url": "https://jobs.example.com/posting/123"}
+            )
+
+        self.assertEqual(result["resolution_phase"], "FAILED")
+        self.assertEqual(result["submit_job_application_messages"], [])
+
+    async def test_resolution_node_delegates_a_login_gate_and_remembers_where_to_return(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationUrlResolution(
+            ready_to_apply=False,
+            requires_login=True,
+            actual_job_url="https://jobs.example.com/login",
+            message="Sign-in is required.",
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(nodes, "get_custom_model_with_tools", new_callable=AsyncMock, return_value=browser_model),
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.resolve_application_url(
+                {"job_url": "https://jobs.example.com/posting/123"}
+            )
+
+        self.assertEqual(result["resolution_phase"], "REQUIRES_LOGIN")
+        self.assertEqual(result["login_return_node"], "resolve_application_url")
+        self.assertEqual(result["actual_job_url"], "https://jobs.example.com/login")
+
+    async def test_resolution_after_successful_login_does_not_retry_login(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationUrlResolution(
+            ready_to_apply=False,
+            requires_login=True,
+            actual_job_url="https://jobs.example.com/login",
+            message="Sign-in is required.",
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=browser_model,
+            ),
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.resolve_application_url(
+                {
+                    "job_url": "https://jobs.example.com/posting/123",
+                    "actual_job_url": "https://jobs.example.com/apply/123",
+                    "authenticated_session": True,
+                    "resolve_application_url_messages": [],
+                }
+            )
+
+        self.assertEqual(result["resolution_phase"], "FAILED")
+        self.assertTrue(result["requires_human"])
+        prompt_messages = browser_model.ainvoke.await_args.args[0]
+        self.assertIn("https://jobs.example.com/apply/123", prompt_messages[1]["content"])
+        self.assertIn("just verified an authenticated session", prompt_messages[2]["content"])
+
+    async def test_authenticated_resolution_preserves_tool_evidence_after_the_first_turn(self):
+        tool_call = {"name": "list_pages", "args": {}, "id": "call-1"}
+        browser_model = AsyncMock()
+        browser_model.ainvoke.side_effect = [
             type("Response", (), {"tool_calls": [tool_call]})(),
             type("Response", (), {"tool_calls": []})(),
         ]
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationUrlResolution(
+            ready_to_apply=True,
+            requires_login=False,
+            actual_job_url="https://jobs.example.com/apply/123",
+            message="Application form is ready.",
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        state = {
+            "job_url": "https://jobs.example.com/posting/123",
+            "actual_job_url": "https://jobs.example.com/apply/123",
+            "authenticated_session": True,
+            "resolve_application_url_messages": [],
+        }
+        with (
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=browser_model,
+            ),
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            first_turn = await nodes.resolve_application_url(state)
+            second_turn = await nodes.resolve_application_url(
+                {
+                    **state,
+                    "resolve_application_url_messages": first_turn[
+                        "resolve_application_url_messages"
+                    ],
+                }
+            )
+
+        self.assertEqual(first_turn["resolution_phase"], "NEEDS_TOOLS")
+        self.assertEqual(second_turn["resolution_phase"], "SUCCESS")
+        self.assertEqual(
+            browser_model.ainvoke.await_args_list[1].args[0],
+            first_turn["resolve_application_url_messages"],
+        )
+
+    async def test_submission_node_delegates_an_unexpected_login_and_returns_to_itself(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationResult(
+            decision=ApplicationNotAppliedSubModel(
+                requires_login=True,
+                requires_human=False,
+                human_intervention_reason=None,
+                human_intervention_prompt="",
+            )
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(nodes, "get_custom_model_with_tools", new_callable=AsyncMock, return_value=browser_model),
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.submit_job_application(
+                {"submit_job_application_messages": [{"role": "user", "content": "Apply."}]}
+            )
+
+        self.assertEqual(result["job_application_phase"], "REQUIRES_LOGIN")
+        self.assertEqual(result["login_return_node"], "submit_job_application")
+
+    async def test_login_node_returns_a_successful_login_to_its_caller(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = AuthenticationResult(
+            is_logged_in=True,
+            logged_in_url="https://jobs.example.com/apply/123",
+            message="Signed in.",
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(nodes, "get_custom_model_with_tools", new_callable=AsyncMock, return_value=browser_model) as get_model,
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.perform_login(
+                {
+                    "actual_job_url": "https://jobs.example.com/login",
+                    "login_return_node": "submit_job_application",
+                }
+            )
+
+        get_model.assert_awaited_once_with(["chrome", "gmail"])
+        self.assertEqual(result["login_phase"], "SUCCESS")
+        self.assertEqual(result["actual_job_url"], "https://jobs.example.com/apply/123")
+        self.assertTrue(result["authenticated_session"])
+        self.assertEqual(result["resolve_application_url_messages"], [])
+        self.assertEqual(result["perform_login_messages"], [])
+
+    async def test_fetch_node_routes_browser_calls_to_the_shared_tool_node(self):
+        tool_call = {"name": "navigate_page", "args": {"url": "https://jobright.com"}, "id": "call-1"}
+        model = AsyncMock()
+        model.ainvoke.return_value = type("Response", (), {"tool_calls": [tool_call]})()
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(nodes, "recent_workbook_job_summaries", return_value=[]) as recent_workbook_jobs,
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=model,
+            ),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+            patch.object(nodes, "log_tool_calls"),
+        ):
+            result = await nodes.fetch_jobright_jobs(
+                {"jobright_job_count": 1, "excel_file_path": "/tmp/jobs.xlsx"}
+            )
+
+        recent_workbook_jobs.assert_called_once_with(Path("/tmp/jobs.xlsx"), limit=20)
+        self.assertEqual(result["next_step"], "tool_node")
+        self.assertEqual(result["tool_call_origin"], "fetch_jobright_jobs")
+        self.assertEqual(result["jobright_collection_messages"][-1].tool_calls, [tool_call])
+
+    async def test_shared_tool_node_appends_jobright_tool_results_to_its_transcript(self):
+        tool_call = {"name": "navigate_page", "args": {"url": "https://jobright.com"}, "id": "call-1"}
         browser_tool = AsyncMock()
         browser_tool.ainvoke.return_value = "Jobright recommendations are visible."
+        response = type("Response", (), {"tool_calls": [tool_call]})()
 
         async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
             return await awaitable
@@ -195,64 +642,30 @@ class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
         nodes.tools_by_name["navigate_page"] = browser_tool
         try:
             with (
-                patch.object(
-                    nodes,
-                    "get_custom_model_with_tools",
-                    new_callable=AsyncMock,
-                    return_value=model,
-                ),
                 patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
                 patch.object(nodes, "log_tool_calls"),
                 patch.object(nodes, "log_tool_result"),
             ):
-                messages = await nodes._run_browser_agent("fetch_jobright_jobs", [])
+                result = await nodes.tool_node({
+                    "tool_call_origin": "fetch_jobright_jobs",
+                    "jobright_collection_messages": [
+                        {"role": "system", "content": "browser instructions"},
+                        response,
+                    ],
+                })
         finally:
             nodes.tools_by_name.clear()
             nodes.tools_by_name.update(original_tools)
 
         browser_tool.ainvoke.assert_awaited_once_with({"url": "https://jobright.com"})
-        self.assertEqual(model.ainvoke.await_count, 2)
-        self.assertIsInstance(messages[-2], nodes.ToolMessage)
+        self.assertEqual(len(result["jobright_collection_messages"]), 3)
+        self.assertIsInstance(result["jobright_collection_messages"][-1], nodes.ToolMessage)
 
-    async def test_fetch_node_collects_and_writes_each_job_individually(self):
-        jobs = [
-            {
-                "rank": 1,
-                "link": f"https://jobright.com/jobs/info/job-{number}",
-                "applyUrl": f"https://jobs.example.com/openings/{number}",
-                "title": f"Role {number}",
-                "companyName": f"Company {number}",
-            }
-            for number in range(1, 3)
-        ]
-
-        with (
-            patch.object(nodes, "recent_workbook_job_summaries", return_value=[]) as recent_workbook_jobs,
-            patch.object(
-                nodes,
-                "collect_jobright_job",
-                new_callable=AsyncMock,
-                side_effect=[JobrightJob(**job) for job in jobs],
-            ) as collect,
-            patch.object(nodes, "upsert_job_row", side_effect=[("inserted", 2), ("inserted", 3)]) as upsert,
-        ):
-            result = await nodes.fetch_jobright_jobs(
-                {"jobright_job_count": 2, "excel_file_path": "/tmp/jobs.xlsx"}
-            )
-
-        recent_workbook_jobs.assert_called_once_with(Path("/tmp/jobs.xlsx"), limit=20)
-        self.assertEqual(collect.await_count, 2)
-        self.assertEqual(collect.await_args_list[0].args, (1, 2, []))
-        self.assertEqual(
-            collect.await_args_list[1].args,
-            (2, 2, [{"companyName": "Company 1", "title": "Role 1"}]),
-        )
-        self.assertEqual(upsert.call_count, 2)
-        self.assertEqual(len(result["jobright_jobs"]), 2)
-        self.assertIn("individually", result["messages"][0]["content"])
-
-    async def test_fetch_node_keeps_earlier_workbook_writes_when_a_later_job_fails(self):
-        job = JobrightJob(
+    async def test_fetch_node_persists_a_completed_job_through_jobright_helper(self):
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = JobrightJob(
             rank=1,
             link="https://jobright.com/jobs/info/job-1",
             applyUrl="https://jobs.example.com/openings/1",
@@ -260,23 +673,36 @@ class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
             companyName="Company 1",
         )
 
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
         with (
-            patch.object(nodes, "recent_workbook_job_summaries", return_value=[]),
             patch.object(
                 nodes,
-                "collect_jobright_job",
+                "get_custom_model_with_tools",
                 new_callable=AsyncMock,
-                side_effect=[job, RuntimeError("Jobright timed out")],
+                return_value=browser_model,
             ),
-            patch.object(nodes, "upsert_job_row", return_value=("inserted", 2)) as upsert,
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "persist_jobright_jobs") as persist,
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
         ):
+            persist.return_value = type("WriteResult", (), {"inserted": 1, "updated": 0})()
             result = await nodes.fetch_jobright_jobs(
-                {"jobright_job_count": 2, "excel_file_path": "/tmp/jobs.xlsx"}
+                {
+                    "jobright_job_count": 1,
+                    "excel_file_path": "/tmp/jobs.xlsx",
+                    "jobright_excluded_jobs": [],
+                    "jobright_collection_messages": [
+                        {"role": "system", "content": "browser instructions"},
+                        {"role": "user", "content": "browser task"},
+                        nodes.ToolMessage(content="snapshot", tool_call_id="call-1", name="snapshot"),
+                    ],
+                }
             )
 
-        upsert.assert_called_once()
+        persist.assert_called_once()
         self.assertEqual(len(result["jobright_jobs"]), 1)
-        self.assertIn("after saving 1 job", result["messages"][0]["content"])
+        self.assertEqual(result["next_step"], "collect_user_request")
 
 
 if __name__ == "__main__":
