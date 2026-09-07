@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 from contextlib import asynccontextmanager
 from subprocess import DEVNULL, Popen
 
@@ -12,7 +13,10 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 from dotenv import load_dotenv
+from google.auth.exceptions import RefreshError
+from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2.credentials import Credentials
 from mcp import types
 
 load_dotenv()
@@ -30,6 +34,9 @@ CHROME_DEBUG_PORT = int(os.getenv("JOB_AGENT_CHROME_PORT", "9223"))
 CHROME_DEBUG_URL = f"http://127.0.0.1:{CHROME_DEBUG_PORT}"
 CHROME_DEBUG_PROFILE = Path(
     os.getenv("JOB_AGENT_CHROME_PROFILE", str(Path.home() / "chrome-debug-profile"))
+)
+GMAIL_TOKEN_PATH = Path(
+    os.getenv("JOB_AGENT_GMAIL_TOKEN_PATH", str(PROJECT_ROOT / "user" / "gmail_token.json"))
 )
 
 
@@ -147,16 +154,71 @@ async def ensure_chrome_debugger() -> None:
     )
 
 
-def get_gmail_server_config():
-    """Authorize Gmail only when a workflow actually needs its MCP tools."""
+def _save_gmail_credentials(credentials: Credentials) -> None:
+    """Persist credentials with owner-only file permissions."""
+    GMAIL_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    GMAIL_TOKEN_PATH.write_text(credentials.to_json(), encoding="utf-8")
+    GMAIL_TOKEN_PATH.chmod(0o600)
+
+
+def get_gmail_credentials() -> Credentials:
+    """Load, refresh, or (only when necessary) authorize Gmail credentials."""
+    credentials = None
+    if GMAIL_TOKEN_PATH.is_file():
+        try:
+            credentials = Credentials.from_authorized_user_file(
+                str(GMAIL_TOKEN_PATH), SCOPES
+            )
+        except (OSError, ValueError):
+            # A truncated or manually edited cache cannot be trusted. Re-authorize
+            # and replace it instead of failing all Gmail-backed workflows.
+            credentials = None
+
+    if credentials and credentials.valid:
+        return credentials
+
+    if (
+        credentials
+        and credentials.expired
+        and credentials.refresh_token
+    ):
+        try:
+            credentials.refresh(Request())
+            _save_gmail_credentials(credentials)
+            return credentials
+        except RefreshError:
+            # The user revoked access or Google invalidated the refresh token.
+            # Fall through to an interactive authorization.
+            pass
+
     flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-    credentials = flow.run_local_server(port=0)
+    credentials = flow.run_local_server(
+        port=0,
+        access_type="offline",
+        prompt="consent",
+    )
+    _save_gmail_credentials(credentials)
+    return credentials
+
+
+def get_gmail_server_config():
+    """Configure the local adapter backed by the stable Gmail REST API v1.
+
+    ``gmail.googleapis.com`` exposes Gmail's REST API, not an MCP endpoint.
+    Running a small local stdio server lets the workflow retain its MCP tool
+    interface without depending on the Workspace Developer Preview server at
+    ``gmailmcp.googleapis.com``.
+    """
+    # Authorize (and refresh) before the server is started so OAuth failures
+    # surface at the workflow boundary rather than during an arbitrary tool
+    # call. The refreshed credentials are saved to GMAIL_TOKEN_PATH; the child
+    # process reads that file directly and never receives a token via its args.
+    get_gmail_credentials()
     return {
-        "transport": "streamable_http",
-        "url": "https://gmailmcp.googleapis.com/mcp/v1",
-        "headers": {
-            "Authorization": f"Bearer {credentials.token}"
-        },
+        "transport": "stdio",
+        "command": sys.executable,
+        "args": ["-m", "mcp_connection.gmail_server"],
+        "cwd": str(PROJECT_ROOT),
     }
 
 
