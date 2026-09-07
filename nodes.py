@@ -951,7 +951,7 @@ async def submit_job_application(state):
     
     messages = state['submit_job_application_messages']
 
-    model_with_tools = await get_custom_model_with_tools(["chrome"])
+    model_with_tools = await get_custom_model_with_tools(["chrome", "gmail"])
     structured_job_application_model = get_custom_structured_model("job_application_model")
 
     response = await await_with_progress(
@@ -1033,6 +1033,10 @@ async def submit_job_application(state):
 
 @trace_node
 def build_verify_job_status_messages(state):
+    job_details = state.get("job_details") or state.get("current_job") or {}
+    if hasattr(job_details, "model_dump"):
+        job_details = job_details.model_dump()
+
     return {
         "verify_job_status_messages": [
             {"role": "system", "content": load_prompt("verify_application/system.txt")},
@@ -1042,6 +1046,8 @@ def build_verify_job_status_messages(state):
                     "verify_application/user.txt",
                     application_url=state.get("url_applied_on", ""),
                     is_applied=state.get("is_applied", False),
+                    company_name=job_details.get("companyName", ""),
+                    job_title=job_details.get("title", ""),
                 ),
             },
         ]
@@ -1053,7 +1059,7 @@ async def verify_job_status(state):
     node_name = "verify_job_status"
     log_node_stage(node_name, "Started — verifying job application success")
 
-    model_with_tools = await get_custom_model_with_tools(["chrome"])
+    model_with_tools = await get_custom_model_with_tools(["chrome", "gmail"])
     structured_model = get_custom_structured_model("application_verification_model")
     messages = state["verify_job_status_messages"]
 
@@ -1078,7 +1084,7 @@ async def verify_job_status(state):
         {
             "role": "user",
             "content": (
-                "Based on the browsing evidence above, you MUST return the structured output evaluation now."
+                "Based on the page and Gmail evidence above, you MUST return the structured output evaluation now."
             ),
         },
     ]
@@ -1090,8 +1096,15 @@ async def verify_job_status(state):
     logger.debug("Verification result: %s", structured_response)
 
     return {
-        "verification_phase": "APPLIED" if structured_response.application_status == "APPLIED" else "NOT_APPLIED",
-        "verify_job_status_messages": [response, structured_response.message]
+        "verification_phase": (
+            "APPLIED"
+            if structured_response.application_status == "Applied"
+            else "NOT_APPLIED"
+        ),
+        "application_status": structured_response.application_status,
+        "is_applied": structured_response.application_status == "Applied",
+        "final_status_message": structured_response.message,
+        "verify_job_status_messages": [response, structured_response.message],
     }
 
 

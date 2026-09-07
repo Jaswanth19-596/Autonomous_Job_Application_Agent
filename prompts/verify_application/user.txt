@@ -4,4 +4,12 @@
 {application_url}
 </application_url>
 
-The prior application step reported `is_applied = {is_applied}`. Verify the status using the page evidence; do not rely on that value if the page contradicts it.
+<target_company>
+{company_name}
+</target_company>
+
+<target_job_title>
+{job_title}
+</target_job_title>
+
+The prior application step reported `is_applied = {is_applied}`. Verify the status using the permitted sources above; do not rely on that value if the evidence contradicts it.

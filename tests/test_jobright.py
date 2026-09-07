@@ -11,7 +11,12 @@ from jobs.jobright import (
     recent_workbook_job_summaries,
     workbook_rows_from_jobright_jobs,
 )
-from models import ApplicationUrlResolution, AuthenticationResult, JobrightJob
+from models import (
+    ApplicationUrlResolution,
+    ApplicationVerificationResult,
+    AuthenticationResult,
+    JobrightJob,
+)
 from models.schemas import (
     ApplicationAppliedSubModel,
     ApplicationNotAppliedSubModel,
@@ -209,6 +214,57 @@ class JobrightPromptTests(unittest.TestCase):
 
 
 class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
+    def test_verification_prompt_checks_gmail_before_the_application_url(self):
+        result = nodes.build_verify_job_status_messages(
+            {
+                "url_applied_on": "https://jobs.example.com/confirmation/123",
+                "is_applied": True,
+                "job_details": {"companyName": "Example Co", "title": "Data Engineer"},
+            }
+        )
+
+        system_message, user_message = result["verify_job_status_messages"]
+        self.assertIn("Gmail tools", system_message["content"])
+        self.assertIn("Example Co", user_message["content"])
+        self.assertIn("Data Engineer", user_message["content"])
+        self.assertLess(
+            system_message["content"].index("First use the Gmail tools"),
+            system_message["content"].index("Only when Gmail has no qualifying"),
+        )
+
+    async def test_verification_accepts_matching_confirmation_email(self):
+        verifier_model = AsyncMock()
+        verifier_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
+        structured_model = AsyncMock()
+        structured_model.ainvoke.return_value = ApplicationVerificationResult(
+            application_status="Applied",
+            evidence_source="confirmation_email",
+            message="Example Co confirmed receipt of the Data Engineer application.",
+        )
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        with (
+            patch.object(
+                nodes,
+                "get_custom_model_with_tools",
+                new_callable=AsyncMock,
+                return_value=verifier_model,
+            ) as get_model,
+            patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.verify_job_status(
+                {"verify_job_status_messages": [{"role": "user", "content": "Verify."}]}
+            )
+
+        get_model.assert_awaited_once_with(["chrome", "gmail"])
+        self.assertEqual(result["verification_phase"], "APPLIED")
+        self.assertEqual(result["application_status"], "Applied")
+        self.assertTrue(result["is_applied"])
+        self.assertIn("confirmed receipt", result["final_status_message"])
+
     async def test_dispatch_resets_authentication_state_for_the_next_job(self):
         result = await nodes.dispath_job(
             {

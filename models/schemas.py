@@ -159,7 +159,16 @@ class ApplicationResult(BaseModel):
 class ApplicationVerificationResult(BaseModel):
     application_status: Literal[
         "Applied", "Not Applied", "Failed", "Needs CAPTCHA", "In Progress"
-    ] = Field(description="The verified application status shown by the application site.")
+    ] = Field(
+        description=(
+            "The verified application status, supported either by the application "
+            "site or by a matching application-confirmation email."
+        )
+    )
+    evidence_source: Literal["application_site", "confirmation_email", "none"] = Field(
+        default="none",
+        description="Where the decisive verification evidence came from."
+    )
     message: str = Field(
         description="A concise explanation of the evidence supporting the verified status."
     )
