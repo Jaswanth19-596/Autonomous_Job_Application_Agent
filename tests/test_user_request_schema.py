@@ -12,6 +12,20 @@ import nodes
 
 
 class UserRequestDecisionTests(unittest.IsolatedAsyncioTestCase):
+    def test_response_text_omits_responses_api_reasoning_blocks(self):
+        content = [
+            {
+                "type": "reasoning",
+                "encrypted_content": "opaque-provider-reasoning",
+            },
+            {"type": "text", "text": "How can I help you today?"},
+        ]
+
+        self.assertEqual(
+            nodes.visible_response_text(content),
+            "How can I help you today?",
+        )
+
     def test_wraps_the_discriminated_job_validation_in_a_pydantic_model(self):
         decision = ValidJobOrNotDecision.model_validate(
             {"decision": {"valid_job": "YES"}}

@@ -6,6 +6,7 @@ from langgraph.types import interrupt
 from mcp_connection import mcp_manager
 # from langchain_openrouter import ChatOpenRouter  # Disabled: OpenRouter is no longer used.
 from langchain_openai import ChatOpenAI
+from langchain_core.runnables import RunnableConfig
 import logging
 import json
 import os
@@ -24,6 +25,7 @@ from models.schemas import (
     UserRequestDecision
 )
 from prompts import load_prompt
+from utilities.opencode import OPENCODE_USER_AGENT, opencode_session_headers
 from utilities import (
     await_with_progress,
     get_jobs,
@@ -50,20 +52,19 @@ from mcp_connection.mcp_manager import MCPManager
 from langgraph.prebuilt import ToolNode
 from langchain.messages import ToolMessage
 
-# Legacy OpenRouter setup is deliberately disabled. The selected OpenCode Go
-# model is served through its OpenAI-compatible Chat Completions API endpoint.
+# Legacy OpenRouter setup is deliberately disabled. Muse Spark is served by
+# OpenCode Go's OpenAI-compatible Responses API, not Chat Completions.
 # model = ChatOpenRouter(
 #     model="deepseek/deepseek-v4-flash-0731",
 #     api_key=os.getenv("OPENROUTER_API_KEY"),
 #     openrouter_provider={...},
 # )
 model = ChatOpenAI(
-    model="glm-5.3-flash",
+    model="muse-spark-1.3-contributor",
     api_key=os.getenv("OPENCODE_API_KEY"),
     base_url="https://opencode.ai/zen/go/v1",
-    # DeepSeek V4 enables thinking by default, but its thinking mode rejects
-    # the forced tool choice LangChain uses for structured Pydantic output.
-    extra_body={"thinking": {"type": "disabled"}},
+    default_headers={"User-Agent": OPENCODE_USER_AGENT},
+    use_responses_api=True,
     timeout=120.0,
     max_retries=2,
 )
@@ -72,8 +73,29 @@ model = ChatOpenAI(
 mcp_manager = MCPManager()
 
 
-async def get_custom_model_with_tools(tool_list):
+def visible_response_text(content: object) -> str:
+    """Return only user-visible text from Chat Completions or Responses content."""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+
+    text_blocks = []
+    for block in content:
+        if isinstance(block, dict):
+            block_type = block.get("type")
+            text = block.get("text")
+        else:
+            block_type = getattr(block, "type", None)
+            text = getattr(block, "text", None)
+        if block_type in {"text", "output_text"} and isinstance(text, str):
+            text_blocks.append(text)
+    return "\n".join(text_blocks)
+
+
+async def get_custom_model_with_tools(tool_list, config: RunnableConfig | None = None):
     """Load requested MCP tools before binding them to the model."""
+    headers = opencode_session_headers(config)
     mcp_servers = [tool_name for tool_name in tool_list if tool_name in {"chrome", "gmail"}]
     mcp_tools = await mcp_manager.start(mcp_servers) if mcp_servers else []
 
@@ -83,30 +105,37 @@ async def get_custom_model_with_tools(tool_list):
     tools = [*mcp_tools]
     if "custom" in tool_list:
         tools.append(get_jobs)
-    return model.bind_tools(tools=tools)
+    return model.bind_tools(tools=tools, extra_headers=headers)
 
-def _with_go_structured_output(schema):
-    """Use tool-based structured output because Go does not support json_schema."""
-    return model.with_structured_output(schema, method="function_calling")
+def _with_go_structured_output(schema, config: RunnableConfig | None = None):
+    """Use Go-compatible tool output without forcing an unsupported named tool."""
+    return model.with_structured_output(
+        schema,
+        method="function_calling",
+        # Muse Spark's Responses API accepts only automatic tool selection.
+        # The structured-output prompt still requires the returned schema tool.
+        tool_choice="auto",
+        extra_headers=opencode_session_headers(config),
+    )
 
 
-def get_custom_structured_model(model_type):
+def get_custom_structured_model(model_type, config: RunnableConfig | None = None):
     if model_type == "job_application_model":
-        return _with_go_structured_output(ApplicationResult)
+        return _with_go_structured_output(ApplicationResult, config)
     elif model_type == "user_request_model":
-        return _with_go_structured_output(UserRequestDecision)
+        return _with_go_structured_output(UserRequestDecision, config)
     elif model_type == "job_details_model":
-        return _with_go_structured_output(JobDetailsModel)
+        return _with_go_structured_output(JobDetailsModel, config)
     elif model_type == "job_validation_model":
-        return _with_go_structured_output(ValidJobOrNotDecision)
+        return _with_go_structured_output(ValidJobOrNotDecision, config)
     elif model_type == "application_url_resolution_model":
-        return _with_go_structured_output(ApplicationUrlResolution)
+        return _with_go_structured_output(ApplicationUrlResolution, config)
     elif model_type == "authentication_model":
-        return _with_go_structured_output(AuthenticationResult)
+        return _with_go_structured_output(AuthenticationResult, config)
     elif model_type == "application_verification_model":
-        return _with_go_structured_output(ApplicationVerificationResult)
+        return _with_go_structured_output(ApplicationVerificationResult, config)
     elif model_type == "jobright_job_model":
-        return _with_go_structured_output(JobrightJob)
+        return _with_go_structured_output(JobrightJob, config)
     else:
         return None
     
@@ -318,8 +347,9 @@ async def user_request_llm_node(state):
         structured_model.ainvoke(structured_messages),
     )
 
-    if response.content:
-        print(response.content)
+    response_text = visible_response_text(response.content)
+    if response_text:
+        print(response_text)
 
 
     decision = structured_response.decision

@@ -433,6 +433,7 @@ class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
                 new_callable=AsyncMock,
                 return_value=browser_model,
             ),
+            patch.object(nodes, "get_custom_structured_model"),
             patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
         ):
             result = await nodes.resolve_application_url(
