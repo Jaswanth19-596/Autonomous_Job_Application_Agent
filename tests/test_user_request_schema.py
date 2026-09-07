@@ -119,7 +119,7 @@ class UserRequestDecisionTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(result["validation_phase"], "ELIGIBLE")
-        self.assertEqual(result["invalid_job_reason"], "")
+        self.assertEqual(result["final_status_message"], "")
 
 
 if __name__ == "__main__":

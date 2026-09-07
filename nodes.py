@@ -732,7 +732,7 @@ async def is_job_valid(state):
     decision = structured_response.decision
     return {
         "validation_phase": "ELIGIBLE" if decision.valid_job == "YES" else "NOT_ELIGIBLE",
-        "invalid_job_reason": getattr(decision, "invalid_job_reason", ""),
+        "final_status_message": getattr(decision, "invalid_job_reason", ""),
         "is_applied": False,
     }
 

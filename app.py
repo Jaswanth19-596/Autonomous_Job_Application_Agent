@@ -104,7 +104,6 @@ class MyState(MessagesState):
     job_application_phase: Literal["NEEDS_TOOLS", "REQUIRES_LOGIN", "APPLIED", "NOT_APPLIED", "END"] = "NOT_APPLIED"
 
     is_applied: bool = False
-    invalid_job_reason: str = ""
     url_applied_on: str = ""
 
     ready_to_apply: bool = False
