@@ -11,7 +11,7 @@ load_dotenv()
 # Determine project root and data directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-EXCEL_PATH = DATA_DIR / "jobs.xlsx"
+EXCEL_PATH = DATA_DIR / "applied_jobs.xlsx"
 
 
 # Keep this schema in one place: every fetch removes all other workbook fields.
@@ -234,7 +234,7 @@ def search_jobs(keywords, location, under10Applicants: bool = False ):
     Search LinkedIn job postings using Apify.
 
     Use this tool when the user asks to find current or recently
-    posted jobs. Returns structured job listings and saves them to data/jobs.xlsx.
+    posted jobs. Returns structured job listings and saves them to data/applied_jobs.xlsx.
     """
 
     client = _get_apify_client()

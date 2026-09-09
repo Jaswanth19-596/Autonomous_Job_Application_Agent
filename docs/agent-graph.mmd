@@ -1,0 +1,51 @@
+%% Main workflow overview — designed for Mermaid-to-Excalidraw conversion.
+%% Detailed shared-tool wiring is in agent-tool-resume.mmd.
+flowchart LR
+    start([START]) --> init[Initialize user data]
+    init --> input[Collect user request]
+    input --> intent{Understand request}
+
+    intent -->|Chat| input
+    intent -->|End| finish([END])
+    intent -->|Find JobRight jobs| jobright[Fetch JobRight jobs]
+    jobright -->|More jobs or tools needed| jobright
+    jobright -->|Finished| input
+
+    intent -->|Single job URL| details[Extract job details]
+    details --> save[Save job to workbook]
+
+    intent -->|Apply to saved jobs| queue[Build application queue]
+    queue --> dispatch[Choose next queued job]
+    dispatch -->|Job available| validate_context[Build validation context]
+    dispatch -->|Queue empty| input
+
+    save --> validate_context
+
+    subgraph application[Application flow for the current job]
+        direction LR
+        validate_context --> validate{Validate job}
+        validate -->|Not eligible| status[Update job status]
+        validate -->|Eligible| resolve{Resolve application URL}
+
+        resolve -->|URL ready| apply{Submit application}
+        resolve -->|Login needed| login{Perform login}
+        resolve -->|Cannot resolve| review[Human review]
+
+        login -->|Login succeeds| resolve
+        login -->|Login fails| review
+
+        apply -->|Applied| verify_context[Build verification context]
+        verify_context --> verify{Verify application}
+        verify -->|Confirmed or not confirmed| status
+        apply -->|Not applied| status
+        apply -->|Needs human help| review
+
+        review -->|Resume URL resolution| resolve
+        review -->|Resume login| login
+        review -->|Resume application| apply
+    end
+
+    status -->|More queued jobs| dispatch
+    status -->|No queued jobs| input
+
+    tool_note["Tool calls are shown separately in agent-tool-resume.mmd"]

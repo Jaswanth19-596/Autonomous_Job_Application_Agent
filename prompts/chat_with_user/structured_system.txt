@@ -6,7 +6,7 @@ Analyze the conversation history between the user and assistant to classify the 
 # Routing Criteria for `next_step`
 - `APPLY_FOR_JOBS`: The user wants to apply to one or more jobs already saved in the workbook (e.g. "apply for it", "apply to job 3", "apply to 5 saved jobs", "apply to software engineer jobs").
 - `NEW_JOB_URL`: The user provided an exact HTTP(S) job-posting URL to fetch or process.
-- `FETCH_JOBRIGHT_JOBS`: The user wants to fetch, import, or refresh Jobright recommendations.
+- `JOBRIGHT_JOBS`: The user wants to fetch, import, or refresh Jobright recommendations.
 - `CHAT`: General conversation, browsing/listing jobs (e.g. "show me 2 jobs"), asking questions, or unclear intent.
 - `END`: The user explicitly asked to end or exit the workflow.
 
@@ -28,8 +28,8 @@ action-specific decision below; do not return the old
 2. For `NEW_JOB_URL`:
    - Set `decision.action` to `NEW_JOB_URL` and set `decision.job_url` to the exact URL.
 
-3. For `FETCH_JOBRIGHT_JOBS`:
-   - Set `decision.action` to `FETCH_JOBRIGHT_JOBS`.
+3. For `JOBRIGHT_JOBS`:
+   - Set `decision.action` to `JOBRIGHT_JOBS`.
    - Set `job_count` to the number of recommendations the user requested, from 1 through 5. Default to 5 only when the user gave no number.
 
 4. For `CHAT` and `END`:

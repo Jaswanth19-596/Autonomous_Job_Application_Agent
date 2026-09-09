@@ -24,27 +24,7 @@ class UserRequestDecision(BaseModel):
 
 class JobrightJob(BaseModel):
     """One visible job card from Jobright's Top Matched recommendations."""
-    rank: int = Field(
-        default=1,
-        ge=1,
-        description="The selected card rank within this single-job collection.",
-    )
     link: str = Field(description="The Jobright detail URL used to inspect this recommendation.")
-    title: str = Field(description="Job title exactly as displayed.")
-    companyName: str = Field(description="Hiring company exactly as displayed.")
-    location: str = Field(default="", description="Displayed location and remote/hybrid mode.")
-    postedAt: str = Field(default="", description="Displayed posting age or date.")
-    applyUrl: str = Field(
-        description=(
-            "Final external employer or applicant-tracking-system URL reached from "
-            "Jobright's Apply action. It must not be a Jobright URL."
-        )
-    )
-    salary: str = Field(default="", description="Displayed salary range, if any.")
-    descriptionText: str = Field(default="", description="Short visible job/company summary only.")
-    seniorityLevel: str = Field(default="", description="Displayed experience or seniority level.")
-    employmentType: str = Field(default="", description="Displayed employment type.")
-    matchScore: str = Field(default="", description="Displayed Jobright match score; not written to Excel.")
 
 
 class JobDetailsModel(BaseModel):

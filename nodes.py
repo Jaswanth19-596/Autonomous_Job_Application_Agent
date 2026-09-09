@@ -42,15 +42,16 @@ from workbook.jobs_workbook import upsert_job_row, upsert_job_rows
 from jobs.fetcher import APPLICATION_METRIC_COLUMNS, JOB_COLUMNS
 from jobs.jobright import (
     JOBRIGHT_RECOMMENDED_URL,
-    format_recent_workbook_jobs_for_prompt,
+    format_recent_workbook_jobright_urls_for_prompt,
     persist_jobright_jobs,
-    recent_workbook_job_summaries,
+    recent_workbook_jobright_urls,
+    remove_pending_job_url,
 )
 from playwright.async_api import async_playwright
 import pandas as pd
 from mcp_connection.mcp_manager import MCPManager
-from langgraph.prebuilt import ToolNode
 from langchain.messages import ToolMessage
+import asyncio
 
 # Legacy OpenRouter setup is deliberately disabled. Muse Spark is served by
 # OpenCode Go's OpenAI-compatible Responses API, not Chat Completions.
@@ -151,6 +152,30 @@ tools_by_name = {
 logger = logging.getLogger(__name__)
 
 
+# def blocked_application_keyboard_action(tool_name: str, tool_args: object) -> str | None:
+#     """Reject keyboard sequences that can append an email instead of replacing it.
+
+#     Chrome DevTools' ``type_text`` is keyboard typing, not a field-targeted
+#     replacement. Application emails must use ``fill`` or ``fill_form``, which
+#     target a UID and overwrite the field value.
+#     """
+#     if not isinstance(tool_args, dict):
+#         return None
+
+#     if tool_name == "type_text" and "@" in str(tool_args.get("text", "")):
+#         return (
+#             "Blocked unsafe email keyboard entry. Use fill or fill_form with "
+#             "the email input's current snapshot UID; those tools replace the "
+#             "entire existing value."
+#         )
+#     if tool_name == "press_key" and tool_args.get("key") in {"Control+A", "Meta+A"}:
+#         return (
+#             "Blocked select-all shortcut while completing an application. Use "
+#             "fill or fill_form with the ordinary field's UID to replace its value."
+#         )
+#     return None
+
+
 async def shutdown_mcp_tools():
     """Stop the manager-owned persistent MCP sessions after a workflow run."""
     await mcp_manager.stop()
@@ -187,7 +212,8 @@ def initialize_user_data(state):
         raise FileNotFoundError(f"Resume file not found: {resume_file_path}")
 
     # Excel workbook path
-    excel_file_path = str(project_root / "data/jobs.xlsx")
+    applied_jobs_path = str(project_root / "data/applied_jobs.xlsx")
+    pending_jobs_path = str(project_root / "data/pending_jobs.xlsx")
 
     # System prompt for the chat node
     system_message = {"role": "system", "content": load_prompt("chat_with_user/system.txt")}
@@ -198,7 +224,8 @@ def initialize_user_data(state):
         "user_profile": user_profile,
         "resume_data": resume_data,
         "resume_file_path": str(resume_file_path),
-        "excel_file_path": excel_file_path,
+        "applied_jobs_path": applied_jobs_path,
+        "pending_jobs_path": pending_jobs_path,
         "messages": [system_message],
         "submit_job_application_messages": [
             {'role': 'system', 'content': load_prompt("apply_for_job/system.txt")},
@@ -240,6 +267,7 @@ async def tool_node(state):
         tool_name = tool_call["name"]
         tool_args = tool_call["args"]
         tool_call_id = tool_call["id"]
+
         tool = tools_by_name.get(tool_name)
         if tool is None:
             error = f"Unknown tool requested: {tool_name}"
@@ -252,9 +280,12 @@ async def tool_node(state):
             tool_result = await await_with_progress(
                 node_name,
                 f"Running tool: {tool_name}",
-                tool.ainvoke(tool_args),
+                asyncio.wait_for(tool.ainvoke(tool_args), timeout=60),
                 show_progress=False,
             )
+        except asyncio.TimeoutError:
+            tool_result = {"error": f"Tool {tool_name} timed out after 60 seconds"}
+            logger.exception("Tool %s timed out", tool_name)
         except Exception as exc:
             logger.exception("Tool %s failed", tool_name)
             tool_result = {"error": f"{type(exc).__name__}: {exc}"}
@@ -368,7 +399,7 @@ async def user_request_llm_node(state):
             "job_url": decision.job_url,
         }
 
-    if decision.action == "FETCH_JOBRIGHT_JOBS":
+    if decision.action == "JOBRIGHT_JOBS":
         return {
             "messages": [response],
             "user_node_decision": decision.action,
@@ -438,7 +469,7 @@ async def dispath_job(state):
 
     current_job = application_queue[0]
     remaining_application_queue = application_queue[1:]
-    job_url = current_job.get("applyUrl") or current_job.get("link", "")
+    job_url = current_job.get("applyUrl") or current_job.get("url", "")
     log_workflow_event(
         "selected queued job for validation",
         job_id=current_job.get("id", ""),
@@ -476,15 +507,15 @@ async def fetch_jobright_jobs(state):
     if not 1 <= job_number <= job_count:
         raise ValueError("Jobright collection job number must be within the requested count.")
 
-    workbook_path = Path(state["excel_file_path"])
+    workbook_path = Path(state["pending_jobs_path"])
     jobright_jobs = list(state.get("jobright_jobs", []))
     excluded_jobs = list(state.get("jobright_excluded_jobs", []))
     collection_messages = list(state.get("jobright_collection_messages", []))
 
     if not collection_messages:
         if not excluded_jobs:
-            excluded_jobs = recent_workbook_job_summaries(workbook_path, limit=20)
-        excluded_jobs_text = format_recent_workbook_jobs_for_prompt(excluded_jobs)
+            excluded_jobs = recent_workbook_jobright_urls(workbook_path, limit=20)
+        excluded_jobs_text = format_recent_workbook_jobright_urls_for_prompt(excluded_jobs)
         collection_messages = [
             {
                 "role": "system",
@@ -510,7 +541,7 @@ async def fetch_jobright_jobs(state):
     model_with_tools = await get_custom_model_with_tools(["chrome"])
     response = await await_with_progress(
         node_name,
-        f"Collecting Jobright job {job_number}/{job_count}",
+        f"Collecting Jobright URL {job_number}/{job_count}",
         model_with_tools.ainvoke(collection_messages),
     )
     collection_messages.append(response)
@@ -525,11 +556,11 @@ async def fetch_jobright_jobs(state):
             "next_step": "tool_node",
         }
 
-    excluded_jobs_text = format_recent_workbook_jobs_for_prompt(excluded_jobs)
+    excluded_jobs_text = format_recent_workbook_jobright_urls_for_prompt(excluded_jobs)
     structured_model = get_custom_structured_model("jobright_job_model")
     job = await await_with_progress(
         node_name,
-        f"Structuring Jobright job {job_number}/{job_count}",
+        f"Recording Jobright URL {job_number}/{job_count}",
         structured_model.ainvoke([
             {
                 "role": "system",
@@ -553,12 +584,10 @@ async def fetch_jobright_jobs(state):
     write_result = persist_jobright_jobs(workbook_path, [job])
     job_data = job.model_dump()
     jobright_jobs.append(job_data)
-    excluded_jobs.append(
-        {"companyName": job_data["companyName"], "title": job_data["title"]}
-    )
+    excluded_jobs.append(job_data["link"])
     log_node_stage(
         node_name,
-        f"Saved Jobright job {job_number}/{job_count} ({write_result.inserted} added, {write_result.updated} refreshed)",
+        f"Saved Jobright URL {job_number}/{job_count} ({write_result.inserted} added, {write_result.updated} refreshed)",
     )
 
     if job_number < job_count:
@@ -571,7 +600,7 @@ async def fetch_jobright_jobs(state):
         }
 
     message = (
-        f"Saved {len(jobright_jobs)} Jobright job(s) to the workbook."
+        f"Saved {len(jobright_jobs)} Jobright URL(s) to the workbook."
     )
     log_node_stage(node_name, f"Completed — {message}")
     return {
@@ -603,14 +632,13 @@ async def extract_job_details(state):
     logger.debug("Job URL: %s", job_url)
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False)
 
         page = await browser.new_page()
 
         await page.goto(
             job_url,
             wait_until="domcontentloaded",
-            timeout=30_000
         )
 
         await page.wait_for_timeout(2000)
@@ -650,7 +678,7 @@ def save_job_to_workbook(state):
 
     # Getting the arguments
     job_details = state["job_details"]
-    excel_file_path = state["excel_file_path"]
+    applied_jobs_path = state["applied_jobs_path"]
     if hasattr(job_details, "model_dump"):
         model_fields = set(type(job_details).model_fields)
         job_dict = job_details.model_dump(exclude_none=True)
@@ -688,10 +716,20 @@ def save_job_to_workbook(state):
         "application_status", "status", "reason", *APPLICATION_METRIC_COLUMNS,
     }
     write_result = upsert_job_rows(
-        Path(excel_file_path), [row], preserve_existing=application_fields,
+        Path(applied_jobs_path), [row], preserve_existing=application_fields,
     )
     action = "inserted" if write_result.inserted else "updated"
-    log_node_stage(node_name, f"Completed — job {action} in the spreadsheet")
+    pending_url = str(state.get("job_url") or "").strip()
+    removed_pending_jobs = 0
+    if pending_url and state.get("pending_jobs_path"):
+        removed_pending_jobs = remove_pending_job_url(
+            Path(state["pending_jobs_path"]), pending_url,
+        )
+
+    log_node_stage(
+        node_name,
+        f"Completed — job {action} in applied jobs; removed {removed_pending_jobs} pending job(s)",
+    )
 
     return {}
 
@@ -991,10 +1029,14 @@ async def submit_job_application(state):
     )
 
     if response.tool_calls:
+        # ``submit_job_application_messages`` uses LangGraph's append reducer.
+        # Emit only the new assistant message; returning the full transcript
+        # would append prior function calls a second time and make the provider
+        # reject their duplicate call IDs.
         return {
             "job_application_phase": "NEEDS_TOOLS",
             "tool_call_origin": "submit_job_application",
-            "submit_job_application_messages" : [response]
+            "submit_job_application_messages": [response],
         }    
     
     log_node_stage(node_name, "Completed — recording application result")

@@ -5,11 +5,12 @@ from unittest.mock import AsyncMock, patch
 
 from openpyxl import Workbook, load_workbook
 
-from jobs.fetcher import JOB_COLUMNS
 from jobs.jobright import (
+    PENDING_JOB_COLUMNS,
+    normalize_pending_jobs_workbook,
     persist_jobright_jobs,
-    recent_workbook_job_summaries,
-    workbook_rows_from_jobright_jobs,
+    recent_workbook_jobright_urls,
+    remove_pending_job_url,
 )
 from models import (
     ApplicationUrlResolution,
@@ -24,91 +25,73 @@ from models.schemas import (
 )
 import nodes
 from prompts import load_prompt
-from workbook.jobs_workbook import upsert_job_rows
-
-
 class JobrightWorkbookRowsTests(unittest.TestCase):
-    def test_returns_the_twenty_most_recent_workbook_company_role_pairs(self):
+    def test_persists_only_url_and_fetch_time(self):
         with TemporaryDirectory() as directory:
-            path = Path(directory) / "jobs.xlsx"
+            path = Path(directory) / "pending_jobs.xlsx"
+            result = persist_jobright_jobs(path, [
+                {"link": "https://jobright.ai/jobs/info/first"},
+                {"link": "https://jobright.ai/jobs/info/second"},
+            ])
+
+            workbook = load_workbook(path, read_only=True, data_only=True)
+            try:
+                sheet = workbook.active
+                headers = [cell.value for cell in sheet[1]]
+                rows = list(sheet.iter_rows(min_row=2, values_only=True))
+            finally:
+                workbook.close()
+
+        self.assertEqual(result.inserted, 2)
+        self.assertEqual(headers, list(PENDING_JOB_COLUMNS))
+        self.assertEqual([row[0] for row in rows], [
+            "https://jobright.ai/jobs/info/first",
+            "https://jobright.ai/jobs/info/second",
+        ])
+        self.assertTrue(all(row[1] is not None for row in rows))
+
+    def test_removes_pending_job_by_canonical_url(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "pending_jobs.xlsx"
+            persist_jobright_jobs(path, [
+                {"link": "https://jobright.ai/jobs/info/remove?utm_source=test"},
+                {"link": "https://jobright.ai/jobs/info/keep"},
+            ])
+
+            removed = remove_pending_job_url(
+                path,
+                "https://jobright.ai/jobs/info/remove",
+            )
+            remaining = recent_workbook_jobright_urls(path)
+
+        self.assertEqual(removed, 1)
+        self.assertEqual(remaining, ["https://jobright.ai/jobs/info/keep"])
+
+    def test_normalizes_legacy_pending_rows_to_the_two_column_schema(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "pending_jobs.xlsx"
             workbook = Workbook()
             sheet = workbook.active
-            sheet.title = "Applications"
-            sheet.append(["companyName", "title", "application_status"])
-            for number in range(1, 22):
-                sheet.append([f"Company {number}", f"Role {number}", "Applied"])
-            sheet.append(["Unapplied Company", "Unapplied Role", "Not Applied"])
+            sheet.append(["url", "fetched_at", "link", "title"])
+            sheet.append([
+                "",
+                "2026-09-09 10:00:00",
+                "https://jobright.ai/jobs/info/legacy",
+                "Legacy title",
+            ])
             workbook.save(path)
 
-            applications = recent_workbook_job_summaries(path)
+            normalized_count = normalize_pending_jobs_workbook(path)
+            saved = load_workbook(path, read_only=True, data_only=True)
+            try:
+                headers = [cell.value for cell in saved.active[1]]
+                rows = list(saved.active.iter_rows(min_row=2, values_only=True))
+            finally:
+                saved.close()
 
-        self.assertEqual(len(applications), 20)
-        self.assertEqual(
-            applications[0],
-            {"companyName": "Unapplied Company", "title": "Unapplied Role"},
-        )
-        self.assertEqual(applications[-1], {"companyName": "Company 3", "title": "Role 3"})
-
-    def test_preserves_top_matched_order_and_workbook_schema(self):
-        jobs = [
-            {
-                "rank": rank,
-                "link": f"/jobs/recommended/job-{rank}",
-                "applyUrl": f"https://jobs.example.com/openings/{rank}",
-                "title": f"Role {rank}",
-                "companyName": f"Company {rank}",
-                "location": "Remote",
-                "employmentType": "Full-time",
-            }
-            for rank in range(1, 6)
-        ]
-
-        rows = workbook_rows_from_jobright_jobs(jobs)
-
-        self.assertEqual([row["title"] for row in rows], [f"Role {rank}" for rank in range(1, 6)])
-        self.assertEqual(set(rows[0]), set(JOB_COLUMNS))
-        self.assertEqual(rows[0]["link"], "https://jobs.example.com/openings/1")
-        self.assertEqual(rows[0]["applyUrl"], "https://jobs.example.com/openings/1")
-        self.assertEqual(rows[0]["jobboard"], "Jobright")
-        self.assertEqual(rows[0]["application_status"], "Not Applied")
-
-    def test_rejects_any_result_set_that_is_not_the_requested_count(self):
-        jobs = [{"rank": 1, "link": "https://jobright.com/jobs/1"}] * 4
-
-        with self.assertRaisesRegex(ValueError, "top 5"):
-            workbook_rows_from_jobright_jobs(jobs)
-
-    def test_accepts_one_job_when_one_was_requested(self):
-        rows = workbook_rows_from_jobright_jobs(
-            [
-                {
-                    "rank": 1,
-                    "link": "https://jobright.com/jobs/info/job-1",
-                    "applyUrl": "https://jobs.example.com/openings/1",
-                    "title": "Role 1",
-                    "companyName": "Company 1",
-                }
-            ],
-            expected_count=1,
-        )
-
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["title"], "Role 1")
-
-    def test_rejects_more_jobs_than_requested(self):
-        jobs = [
-            {
-                "rank": rank,
-                "link": f"https://jobright.com/jobs/info/job-{rank}",
-                "applyUrl": f"https://jobs.example.com/openings/{rank}",
-                "title": f"Role {rank}",
-                "companyName": f"Company {rank}",
-            }
-            for rank in range(1, 3)
-        ]
-
-        with self.assertRaisesRegex(ValueError, "top 1"):
-            workbook_rows_from_jobright_jobs(jobs, expected_count=1)
+        self.assertEqual(normalized_count, 1)
+        self.assertEqual(headers, list(PENDING_JOB_COLUMNS))
+        self.assertEqual(rows, [("https://jobright.ai/jobs/info/legacy", "2026-09-09 10:00:00")])
 
 
 class JobrightPromptTests(unittest.TestCase):
@@ -117,11 +100,11 @@ class JobrightPromptTests(unittest.TestCase):
             "job_number": 1,
             "job_count": 1,
             "jobright_url": "https://jobright.com/jobs/recommended",
-            "excluded_jobs": "- Company: Example Co; Role: Example Role",
+            "excluded_jobs": "- https://jobright.com/jobs/info/example-role",
         }
 
         self.assertIn(
-            "exactly one Jobright Top Matched job card",
+            "exactly one Jobright Top Matched job URL",
             load_prompt("fetch_jobright_jobs/system.txt", **values),
         )
         self.assertIn(
@@ -129,88 +112,37 @@ class JobrightPromptTests(unittest.TestCase):
             load_prompt("fetch_jobright_jobs/user.txt", **values),
         )
         self.assertIn(
-            "single selected job (1 of 1)",
+            "selected URL\n(1 of 1)",
             load_prompt("fetch_jobright_jobs/structured_system.txt", **values),
         )
         self.assertIn(
-            "These jobs must not be fetched again.",
+            "URLs must not be fetched again.",
+            load_prompt("fetch_jobright_jobs/system.txt", **values),
+        )
+        self.assertIn(
+            "Do not open the detail page, click Apply",
             load_prompt("fetch_jobright_jobs/system.txt", **values),
         )
 
-    def test_rejects_a_jobright_url_as_the_application_destination(self):
-        jobs = [
-            {
-                "rank": rank,
-                "link": f"https://jobright.com/jobs/info/job-{rank}",
-                "applyUrl": f"https://jobright.com/jobs/info/job-{rank}",
-                "title": f"Role {rank}",
-                "companyName": f"Company {rank}",
-            }
-            for rank in range(1, 6)
-        ]
-
-        with self.assertRaisesRegex(ValueError, "external application URL"):
-            workbook_rows_from_jobright_jobs(jobs)
-
-    def test_batch_upsert_skips_duplicate_llm_rows_and_reuses_existing_row(self):
-        row = workbook_rows_from_jobright_jobs([
-            {
-                "rank": rank,
-                "link": f"https://jobright.ai/jobs/info/job-{rank}",
-                "applyUrl": f"https://jobs.example.com/openings/{rank}",
-                "title": f"Role {rank}",
-                "companyName": f"Company {rank}",
-            }
-            for rank in range(1, 6)
-        ])[0]
-
+    def test_returns_recent_jobright_urls_without_using_job_details(self):
         with TemporaryDirectory() as directory:
-            path = Path(directory) / "jobs.xlsx"
+            path = Path(directory) / "pending_jobs.xlsx"
             workbook = Workbook()
             sheet = workbook.active
-            sheet.title = "Applications"
-            sheet.append(JOB_COLUMNS)
+            sheet.append(["url", "fetched_at"])
+            sheet.append(["https://jobright.com/jobs/info/first", "2026-09-09 10:00:00"])
+            sheet.append(["https://jobright.com/jobs/info/second", "2026-09-09 10:01:00"])
             workbook.save(path)
 
-            first_write = upsert_job_rows(path, [row, row.copy()])
-            second_write = upsert_job_rows(path, [row])
+            urls = recent_workbook_jobright_urls(path)
 
-            self.assertEqual(first_write.inserted, 1)
-            self.assertEqual(first_write.updated, 0)
-            self.assertEqual(first_write.skipped_duplicates, 1)
-            self.assertEqual(second_write.inserted, 0)
-            self.assertEqual(second_write.updated, 1)
-
-            saved = load_workbook(path, read_only=True)
-            try:
-                self.assertEqual(saved["Applications"].max_row, 2)
-            finally:
-                saved.close()
-
-    def test_persist_jobright_jobs_owns_the_workbook_write(self):
-        job = {
-            "rank": 1,
-            "link": "https://jobright.com/jobs/info/job-1",
-            "applyUrl": "https://jobs.example.com/openings/1",
-            "title": "Role 1",
-            "companyName": "Company 1",
-        }
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / "jobs.xlsx"
-            workbook = Workbook()
-            sheet = workbook.active
-            sheet.title = "Applications"
-            sheet.append(JOB_COLUMNS)
-            workbook.save(path)
-
-            result = persist_jobright_jobs(path, [job])
-
-            self.assertEqual(result.inserted, 1)
-            saved = load_workbook(path, read_only=True)
-            try:
-                self.assertEqual(saved["Applications"].max_row, 2)
-            finally:
-                saved.close()
+        self.assertEqual(
+            urls,
+            [
+                "https://jobright.com/jobs/info/second",
+                "https://jobright.com/jobs/info/first",
+            ],
+        )
 
 
 class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
@@ -320,6 +252,54 @@ class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["is_applied"])
         self.assertEqual(result["url_applied_on"], "https://jobs.example.com/confirmation/123")
         self.assertFalse(result["requires_human"])
+
+    async def test_submission_node_emits_only_the_new_tool_request(self):
+        tool_call = {"name": "take_snapshot", "args": {}, "id": "call-1"}
+        browser_model = AsyncMock()
+        browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": [tool_call]})()
+
+        async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
+            return await awaitable
+
+        prior_messages = [
+            {"role": "system", "content": "Use fill_form to replace form values."},
+            {"role": "user", "content": "Apply to this job."},
+        ]
+        with (
+            patch.object(nodes, "get_custom_model_with_tools", new_callable=AsyncMock, return_value=browser_model),
+            patch.object(nodes, "get_custom_structured_model"),
+            patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
+        ):
+            result = await nodes.submit_job_application(
+                {"submit_job_application_messages": prior_messages}
+            )
+
+        self.assertEqual(result["job_application_phase"], "NEEDS_TOOLS")
+        self.assertEqual(len(result["submit_job_application_messages"]), 1)
+        self.assertIs(result["submit_job_application_messages"][0], browser_model.ainvoke.return_value)
+
+    async def test_application_tool_node_blocks_email_keyboard_typing(self):
+        tool_call = {
+            "name": "type_text",
+            "args": {"text": "madhajaswanth91@gmail.com"},
+            "id": "call-email",
+        }
+        response = type("Response", (), {"tool_calls": [tool_call]})()
+
+        with (
+            patch.object(nodes, "log_tool_calls"),
+            patch.object(nodes, "log_tool_result"),
+        ):
+            result = await nodes.tool_node(
+                {
+                    "tool_call_origin": "submit_job_application",
+                    "submit_job_application_messages": [response],
+                }
+            )
+
+        tool_message = result["submit_job_application_messages"][0]
+        self.assertIn("Blocked unsafe email keyboard entry", tool_message.content)
+        self.assertEqual(tool_message.tool_call_id, "call-email")
 
     async def test_submission_node_records_the_unsuccessful_human_branch(self):
         browser_model = AsyncMock()
@@ -667,7 +647,7 @@ class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
             return await awaitable
 
         with (
-            patch.object(nodes, "recent_workbook_job_summaries", return_value=[]) as recent_workbook_jobs,
+            patch.object(nodes, "recent_workbook_jobright_urls", return_value=[]) as recent_workbook_urls,
             patch.object(
                 nodes,
                 "get_custom_model_with_tools",
@@ -678,10 +658,10 @@ class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
             patch.object(nodes, "log_tool_calls"),
         ):
             result = await nodes.fetch_jobright_jobs(
-                {"jobright_job_count": 1, "excel_file_path": "/tmp/jobs.xlsx"}
+                {"jobright_job_count": 1, "pending_jobs_path": "/tmp/pending_jobs.xlsx"}
             )
 
-        recent_workbook_jobs.assert_called_once_with(Path("/tmp/jobs.xlsx"), limit=20)
+        recent_workbook_urls.assert_called_once_with(Path("/tmp/pending_jobs.xlsx"), limit=20)
         self.assertEqual(result["next_step"], "tool_node")
         self.assertEqual(result["tool_call_origin"], "fetch_jobright_jobs")
         self.assertEqual(result["jobright_collection_messages"][-1].tool_calls, [tool_call])
@@ -723,11 +703,7 @@ class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
         browser_model.ainvoke.return_value = type("Response", (), {"tool_calls": []})()
         structured_model = AsyncMock()
         structured_model.ainvoke.return_value = JobrightJob(
-            rank=1,
             link="https://jobright.com/jobs/info/job-1",
-            applyUrl="https://jobs.example.com/openings/1",
-            title="Role 1",
-            companyName="Company 1",
         )
 
         async def pass_through_progress(_node, _activity, awaitable, **_kwargs):
@@ -747,7 +723,7 @@ class BrowserAgentTests(unittest.IsolatedAsyncioTestCase):
             result = await nodes.fetch_jobright_jobs(
                 {
                     "jobright_job_count": 1,
-                    "excel_file_path": "/tmp/jobs.xlsx",
+                    "pending_jobs_path": "/tmp/pending_jobs.xlsx",
                     "jobright_excluded_jobs": [],
                     "jobright_collection_messages": [
                         {"role": "system", "content": "browser instructions"},

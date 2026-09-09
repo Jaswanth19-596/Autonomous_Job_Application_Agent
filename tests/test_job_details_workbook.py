@@ -22,7 +22,7 @@ class JobDetailsWorkbookTests(unittest.TestCase):
         with patch.object(nodes, "upsert_job_rows", return_value=write_result) as upsert:
             nodes.save_job_to_workbook({
                 "job_details": details,
-                "excel_file_path": "/tmp/jobs.xlsx",
+                "applied_jobs_path": "/tmp/applied_jobs.xlsx",
                 "job_url": "https://jobs.example.com/roles/123",
             })
 
@@ -51,7 +51,7 @@ class JobDetailsWorkbookTests(unittest.TestCase):
             applyUrl="https://jobs.example.com/roles/123",
         )
         with TemporaryDirectory() as directory:
-            path = Path(directory) / "jobs.xlsx"
+            path = Path(directory) / "applied_jobs.xlsx"
             workbook = Workbook()
             sheet = workbook.active
             sheet.title = "Applications"
@@ -60,7 +60,7 @@ class JobDetailsWorkbookTests(unittest.TestCase):
 
             nodes.save_job_to_workbook({
                 "job_details": details,
-                "excel_file_path": str(path),
+                "applied_jobs_path": str(path),
                 "job_url": "https://jobs.example.com/roles/123",
             })
 
@@ -79,6 +79,51 @@ class JobDetailsWorkbookTests(unittest.TestCase):
         self.assertIsNone(row["link"])
         self.assertIsNone(row["salary"])
         self.assertIsNone(row["descriptionText"])
+
+    def test_moves_a_saved_pending_job_into_applied_jobs(self):
+        details = JobDetailsModel(
+            title="Backend Engineer",
+            companyName="Example Co",
+            applyUrl="https://jobs.example.com/roles/123",
+        )
+        pending_url = "https://jobright.ai/jobs/info/example-job"
+
+        with TemporaryDirectory() as directory:
+            applied_path = Path(directory) / "applied_jobs.xlsx"
+            pending_path = Path(directory) / "pending_jobs.xlsx"
+
+            applied_workbook = Workbook()
+            applied_sheet = applied_workbook.active
+            applied_sheet.title = "Applications"
+            applied_sheet.append(JOB_COLUMNS)
+            applied_workbook.save(applied_path)
+
+            pending_workbook = Workbook()
+            pending_sheet = pending_workbook.active
+            pending_sheet.append(["url", "fetched_at"])
+            pending_sheet.append([pending_url, "2026-09-09 10:00:00"])
+            pending_sheet.append(["https://jobright.ai/jobs/info/keep", "2026-09-09 10:01:00"])
+            pending_workbook.save(pending_path)
+
+            nodes.save_job_to_workbook({
+                "job_details": details,
+                "applied_jobs_path": str(applied_path),
+                "pending_jobs_path": str(pending_path),
+                "job_url": pending_url,
+            })
+
+            saved_pending_workbook = load_workbook(pending_path, read_only=True, data_only=True)
+            try:
+                saved_pending_rows = list(
+                    saved_pending_workbook.active.iter_rows(min_row=2, values_only=True)
+                )
+            finally:
+                saved_pending_workbook.close()
+
+        self.assertEqual(
+            saved_pending_rows,
+            [("https://jobright.ai/jobs/info/keep", "2026-09-09 10:01:00")],
+        )
 
 
 if __name__ == "__main__":

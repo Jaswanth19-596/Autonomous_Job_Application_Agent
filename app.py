@@ -1,3 +1,4 @@
+from websockets.client import backoff
 from collections import deque
 import os
 from langgraph.graph import StateGraph, START, END
@@ -43,7 +44,9 @@ from typing import Annotated
 from operator import add
 from langgraph.types import Command
 from uuid import uuid4
-
+from langgraph.types import RetryPolicy
+from langchain_core.exceptions import OutputParserException
+from langchain_openai.chat_models.base import OpenAIRateLimitError
 
 def replace_messages(_existing: list[dict], replacement: list[dict]) -> list[dict]:
     """Replace a node-local browser transcript at a workflow boundary."""
@@ -64,7 +67,7 @@ class MyState(MessagesState):
 
     #user request phase output
     job_url: str = ""
-    user_node_decision: Literal["NEEDS_TOOLS", "CHAT", "NEW_JOB_URL", "APPLY_FOR_JOBS", "FETCH_JOBRIGHT_JOBS", "END"] = "CHAT"
+    user_node_decision: Literal["NEEDS_TOOLS", "CHAT", "NEW_JOB_URL", "APPLY_FOR_JOBS", "JOBRIGHT_JOBS", "END"] = "CHAT"
     num_jobs_to_process: int = 0
     job_query_filter: dict[str, Any] | None = None
     application_queue: list[dict] = list()
@@ -79,7 +82,8 @@ class MyState(MessagesState):
     jobright_collection_job_number: int = 1
     jobright_excluded_jobs: list[dict[str, str]] = list()
     
-    excel_file_path: str = ""
+    pending_jobs_path: str = ""
+    applied_jobs_path: str = ""
     is_valid: bool = False
     actual_job_url: str = ""
     authenticated_session: bool = False
@@ -110,25 +114,34 @@ class MyState(MessagesState):
 
 graph = StateGraph(MyState)
 
+retry_policy = RetryPolicy(
+    initial_interval=0.5,
+    backoff_factor = 2.0,
+    max_interval = 64,
+    max_attempts = 3,
+    jitter = True,
+    retry_on = [OpenAIRateLimitError, OutputParserException]
+)
 
-graph.add_node(initialize_user_data)
-graph.add_node(collect_user_request)
-graph.add_node(fetch_jobright_jobs)
-graph.add_node(extract_job_details)
-graph.add_node(save_job_to_workbook)
-graph.add_node(is_job_valid)
-graph.add_node(resolve_application_url)
-graph.add_node(perform_login)
-graph.add_node(submit_job_application)
-graph.add_node(update_job_status)
-graph.add_node(verify_job_status)
-graph.add_node("tool_node", tool_node)
-graph.add_node(user_request_llm_node)
-graph.add_node(build_validation_messages)
-graph.add_node(build_verify_job_status_messages)
-graph.add_node(human_in_the_loop)
-graph.add_node(prepare_job_application_queue)
-graph.add_node(dispath_job)
+
+graph.add_node(initialize_user_data, retry_policy=retry_policy)
+graph.add_node(collect_user_request, retry_policy=retry_policy)
+graph.add_node(fetch_jobright_jobs, retry_policy=retry_policy)
+graph.add_node(extract_job_details, retry_policy=retry_policy)
+graph.add_node(save_job_to_workbook, retry_policy=retry_policy)
+graph.add_node(is_job_valid, retry_policy=retry_policy)
+graph.add_node(resolve_application_url, retry_policy=retry_policy)
+graph.add_node(perform_login, retry_policy=retry_policy)
+graph.add_node(submit_job_application, retry_policy=retry_policy)
+graph.add_node(update_job_status, retry_policy=retry_policy)
+graph.add_node(verify_job_status, retry_policy=retry_policy)
+graph.add_node("tool_node", tool_node, retry_policy=retry_policy)
+graph.add_node(user_request_llm_node, retry_policy=retry_policy)
+graph.add_node(build_validation_messages, retry_policy=retry_policy)
+graph.add_node(build_verify_job_status_messages, retry_policy=retry_policy)
+graph.add_node(human_in_the_loop, retry_policy=retry_policy)
+graph.add_node(prepare_job_application_queue, retry_policy=retry_policy)
+graph.add_node(dispath_job, retry_policy=retry_policy)
 
 graph.add_edge(START, "initialize_user_data")
 graph.add_edge("initialize_user_data", "collect_user_request")
@@ -164,7 +177,7 @@ graph.add_conditional_edges(
     "dispath_job",
     route_after_dispatch,
     {
-        "build_validation_messages": "build_validation_messages",
+        "extract_job_details": "extract_job_details",
         "collect_user_request": "collect_user_request",
     },
 )
@@ -207,6 +220,7 @@ graph.add_conditional_edges(
         "perform_login": "perform_login",
         "submit_job_application": "submit_job_application",
         "update_job_status": "update_job_status",
+        "human_in_the_loop": "human_in_the_loop"
     },
 )
 

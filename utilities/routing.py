@@ -23,7 +23,7 @@ def route_user_request(state: dict[str, Any]) -> str:
         "NEEDS_TOOLS": "tool_node",
         "CHAT": "collect_user_request",
         "NEW_JOB_URL": "extract_job_details",
-        "FETCH_JOBRIGHT_JOBS": "fetch_jobright_jobs",
+        "JOBRIGHT_JOBS": "fetch_jobright_jobs",
         "APPLY_FOR_JOBS": "prepare_job_application_queue",
         "END": "END",
     }
@@ -95,7 +95,7 @@ def route_after_login(state: dict[str, Any]) -> str:
 
 def route_after_dispatch(state: dict[str, Any]) -> str:
     """Start validation for the current queued job, or return to chat when exhausted."""
-    destination = "build_validation_messages" if state.get("current_job") is not None else "collect_user_request"
+    destination = "extract_job_details" if state.get("current_job") is not None else "collect_user_request"
     log_workflow_event(
         "route dispath_job",
         has_next_job=state.get("has_next_job", False),

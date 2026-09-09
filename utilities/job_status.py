@@ -9,7 +9,7 @@ from workbook.jobs_workbook import find_job_rows_by_canonical_url, update_job_ro
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_EXCEL_PATH = _PROJECT_ROOT / "data" / "jobs.xlsx"
+_EXCEL_PATH = _PROJECT_ROOT / "data" / "applied_jobs.xlsx"
 
 
 def _resolve_job_id(job_id: str) -> str:
@@ -42,7 +42,7 @@ def update_job_status(
     status: str | None = None,
     reason: str | None = None,
 ) -> dict[str, str]:
-    """Update one job's application status in data/jobs.xlsx.
+    """Update one job's application status in data/applied_jobs.xlsx.
 
     `job_id` may be the workbook ID, a LinkedIn job URL, or another unique job
     URL stored in the workbook. Optional status text records the application

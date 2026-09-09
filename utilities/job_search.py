@@ -10,7 +10,7 @@ from workbook.jobs_workbook import get_job_row
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_EXCEL_PATH = _PROJECT_ROOT / "data" / "jobs.xlsx"
+_EXCEL_PATH = _PROJECT_ROOT / "data" / "pending_jobs.xlsx"
 
 _HEAVY_JOB_COLUMNS = {
     "descriptionHtml",
@@ -44,7 +44,7 @@ def get_jobs(
     fields: list[str] | None = None,
     include_description_snippet: bool = False,
 ) -> dict:
-    """Fetch and search jobs from data/jobs.xlsx with filtering and pagination."""
+    """Fetch and search jobs from data/applied_jobs.xlsx with filtering and pagination."""
     if not _EXCEL_PATH.exists():
         return {"error": "No jobs file found. Run the job fetcher first."}
 

@@ -1,0 +1,11 @@
+%% Shared tool_node behavior — import this beside agent-graph.mmd if needed.
+flowchart TB
+    tool[tool_node: run requested tools]
+
+    tool --> request[Return to user_request_llm_node]
+    tool --> jobright[Return to fetch_jobright_jobs]
+    tool --> validate[Return to is_job_valid]
+    tool --> resolve[Return to resolve_application_url]
+    tool --> login[Return to perform_login]
+    tool --> apply[Return to submit_job_application]
+    tool --> verify[Return to verify_job_status]

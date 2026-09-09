@@ -24,7 +24,7 @@ class DispatchJobsSubModel(BaseModel):
 
 
 class FetchJobrightJobsSubModel(BaseModel):
-    action: Literal["FETCH_JOBRIGHT_JOBS"]
+    action: Literal["JOBRIGHT_JOBS"]
     job_count: int = Field(
         ge=1,
         le=5,

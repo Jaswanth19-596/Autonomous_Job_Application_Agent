@@ -58,11 +58,11 @@ Nodes (9): Any, append_job_rows(), _extend_tables(), _headers(), Update one job 
 
 ### Community 2 - "Agent Tools"
 Cohesion: 0.33
-Nodes (4): BaseModel, AgentOutput, get_jobs(), Fetch and search jobs from data/jobs.xlsx with enhanced filtering and pagination
+Nodes (4): BaseModel, AgentOutput, get_jobs(), Fetch and search jobs from data/applied_jobs.xlsx with enhanced filtering and pagination
 
 ### Community 3 - "Workbook Lookup"
 Cohesion: 0.38
-Nodes (6): _applications_sheet(), find_job_rows_by_canonical_url(), get_job_row(), Targeted jobs.xlsx mutations that preserve dashboard sheets and formatting., Return one Applications row by ID without loading the entire sheet.      The wor, Return every row matching a normalized URL without mutating the workbook.
+Nodes (6): _applications_sheet(), find_job_rows_by_canonical_url(), get_job_row(), Targeted applied_jobs.xlsx mutations that preserve dashboard sheets and formatting., Return one Applications row by ID without loading the entire sheet.      The wor, Return every row matching a normalized URL without mutating the workbook.
 
 ## Knowledge Gaps
 - **2 isolated node(s):** `jobapplicationagent`, `README`
@@ -82,5 +82,5 @@ _Questions this graph is uniquely positioned to answer:_
   _`linkedin_job_id()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 2 inferred relationships involving `canonical_job_url()` (e.g. with `find_job_rows_by_canonical_url()` and `upsert_job_row()`) actually correct?**
   _`canonical_job_url()` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `jobapplicationagent`, `Fetch and search jobs from data/jobs.xlsx with enhanced filtering and pagination`, `Local workbook and candidate-profile access helpers.` to the rest of the system?**
+- **What connects `jobapplicationagent`, `Fetch and search jobs from data/applied_jobs.xlsx with enhanced filtering and pagination`, `Local workbook and candidate-profile access helpers.` to the rest of the system?**
   _16 weakly-connected nodes found - possible documentation gaps or missing edges._

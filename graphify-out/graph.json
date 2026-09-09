@@ -107,14 +107,14 @@
       "norm_label": "get_jobs()"
     },
     {
-      "label": "Fetch and search jobs from data/jobs.xlsx with enhanced filtering and pagination",
+      "label": "Fetch and search jobs from data/applied_jobs.xlsx with enhanced filtering and pagination",
       "file_type": "rationale",
       "source_file": "tools.py",
       "source_location": "L30",
       "_origin": "ast",
       "id": "tools_rationale_30",
       "community": 2,
-      "norm_label": "fetch and search jobs from data/jobs.xlsx with enhanced filtering and pagination"
+      "norm_label": "fetch and search jobs from data/applied_jobs.xlsx with enhanced filtering and pagination"
     },
     {
       "label": "__init__.py",
@@ -357,14 +357,14 @@
       "norm_label": "append_job_rows()"
     },
     {
-      "label": "Targeted jobs.xlsx mutations that preserve dashboard sheets and formatting.",
+      "label": "Targeted applied_jobs.xlsx mutations that preserve dashboard sheets and formatting.",
       "file_type": "rationale",
       "source_file": "workbook/jobs_workbook.py",
       "source_location": "L1",
       "_origin": "ast",
       "id": "workbook_jobs_workbook_rationale_1",
       "community": 3,
-      "norm_label": "targeted jobs.xlsx mutations that preserve dashboard sheets and formatting."
+      "norm_label": "targeted applied_jobs.xlsx mutations that preserve dashboard sheets and formatting."
     },
     {
       "label": "Match an exact stored ID or the stable LinkedIn ID embedded in its URL.",

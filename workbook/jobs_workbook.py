@@ -1,4 +1,4 @@
-"""Targeted jobs.xlsx mutations that preserve dashboard sheets and formatting."""
+"""Targeted applied_jobs.xlsx mutations that preserve dashboard sheets and formatting."""
 
 from __future__ import annotations
 
