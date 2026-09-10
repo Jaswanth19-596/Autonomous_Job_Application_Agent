@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import AsyncMock, patch
+from pathlib import Path
 
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from models.schemas import UserRequestDecision, ValidJobOrNotDecision
@@ -12,6 +13,22 @@ import nodes
 
 
 class UserRequestDecisionTests(unittest.IsolatedAsyncioTestCase):
+    def test_initialization_loads_all_project_briefs(self):
+        result = nodes.initialize_user_data({})
+        projects_dir = Path(nodes.__file__).resolve().parent / "user/projects"
+
+        expected_projects = [
+            path.relative_to(projects_dir).as_posix()
+            for path in sorted(path for path in projects_dir.rglob("*") if path.is_file())
+        ]
+
+        header_positions = []
+        for project_name in expected_projects:
+            header_positions.append(
+                result["projects"].index(f"# {project_name}\n\n")
+            )
+        self.assertEqual(header_positions, sorted(header_positions))
+
     def test_response_text_omits_responses_api_reasoning_blocks(self):
         content = [
             {
@@ -87,7 +104,7 @@ class UserRequestDecisionTests(unittest.IsolatedAsyncioTestCase):
             patch.object(nodes, "get_custom_structured_model", return_value=structured_model),
             patch.object(nodes, "await_with_progress", side_effect=pass_through_progress),
         ):
-            result = await nodes.user_request_llm_node(
+            result = await nodes.understand_user_request_node(
                 {
                     "messages": [
                         {"role": "system", "content": "system"},

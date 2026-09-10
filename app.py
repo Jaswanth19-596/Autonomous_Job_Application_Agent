@@ -13,7 +13,7 @@ from nodes import (
     update_job_status,
     is_job_valid,
     tool_node,
-    user_request_llm_node,
+    understand_user_request_node,
     build_validation_messages,
     build_verify_job_status_messages,
     verify_job_status,
@@ -22,6 +22,7 @@ from nodes import (
     fetch_jobright_jobs,
     prepare_job_application_queue,
     dispath_job,
+    customize_resume
 )
 from langgraph.graph.message import MessagesState
 from typing import Any, Literal
@@ -72,8 +73,13 @@ class MyState(MessagesState):
     job_query_filter: dict[str, Any] | None = None
     application_queue: list[dict] = list()
     current_job: dict = None
-    job_details: dict = None
     has_next_job: bool = False
+
+    #customize resume phase
+    job_details: dict = None
+    customized_resume_path: str = ""
+    projects: str = ""
+    reference_resume_path: str = ""
 
     # Fetch JobRight Jobs
     jobright_jobs: list[dict] = list()
@@ -136,123 +142,75 @@ graph.add_node(submit_job_application, retry_policy=retry_policy)
 graph.add_node(update_job_status, retry_policy=retry_policy)
 graph.add_node(verify_job_status, retry_policy=retry_policy)
 graph.add_node("tool_node", tool_node, retry_policy=retry_policy)
-graph.add_node(user_request_llm_node, retry_policy=retry_policy)
+graph.add_node(understand_user_request_node, retry_policy=retry_policy)
 graph.add_node(build_validation_messages, retry_policy=retry_policy)
 graph.add_node(build_verify_job_status_messages, retry_policy=retry_policy)
 graph.add_node(human_in_the_loop, retry_policy=retry_policy)
 graph.add_node(prepare_job_application_queue, retry_policy=retry_policy)
 graph.add_node(dispath_job, retry_policy=retry_policy)
-
+graph.add_node(customize_resume, retry_policy=retry_policy)
 graph.add_edge(START, "initialize_user_data")
 graph.add_edge("initialize_user_data", "collect_user_request")
-graph.add_edge("collect_user_request", "user_request_llm_node")
+graph.add_edge("collect_user_request", "understand_user_request_node")
 
 
 graph.add_conditional_edges(
-    "user_request_llm_node",
-    route_user_request,
-    {
-        "tool_node": "tool_node",
-        "collect_user_request": "collect_user_request",
-        "extract_job_details": "extract_job_details",
-        "fetch_jobright_jobs": "fetch_jobright_jobs",
-        "build_validation_messages": "build_validation_messages",
-        "prepare_job_application_queue": "prepare_job_application_queue",
-        "END": END,
-    },
+    "understand_user_request_node",
+    route_user_request
 )
 
 graph.add_conditional_edges(
     "perform_login",
-    route_after_login,
-    {
-        "tool_node": "tool_node",
-        "resolve_application_url": "resolve_application_url",
-        "submit_job_application": "submit_job_application",
-        "human_in_the_loop": "human_in_the_loop",
-    },
+    route_after_login
 )
 graph.add_edge("prepare_job_application_queue", "dispath_job")
 graph.add_conditional_edges(
     "dispath_job",
-    route_after_dispatch,
-    {
-        "extract_job_details": "extract_job_details",
-        "collect_user_request": "collect_user_request",
-    },
+    route_after_dispatch
 )
 graph.add_conditional_edges(
     "fetch_jobright_jobs",
-    route_after_jobright_collection,
-    {
-        "tool_node": "tool_node",
-        "fetch_jobright_jobs": "fetch_jobright_jobs",
-        "collect_user_request": "collect_user_request",
-    },
+    route_after_jobright_collection
 )
 graph.add_edge("build_validation_messages", "is_job_valid")
-graph.add_edge("extract_job_details", "save_job_to_workbook")
-graph.add_edge("save_job_to_workbook", "build_validation_messages")
-graph.add_conditional_edges(
-    "update_job_status",
-    route_after_job_status_update,
-    {
-        "dispath_job": "dispath_job",
-        "collect_user_request": "collect_user_request",
-    },
-)
 
 graph.add_conditional_edges(
     "is_job_valid",
-    route_after_validation,
-    {
-        "tool_node": "tool_node",
-        "resolve_application_url": "resolve_application_url",
-        "update_job_status": "update_job_status",
-    },
+    route_after_validation
 )
 
+graph.add_edge("extract_job_details", "save_job_to_workbook")
+graph.add_edge("save_job_to_workbook", "resolve_application_url")
+graph.add_edge("save_job_to_workbook", "customize_resume")
+graph.add_edge(["resolve_application_url","customize_resume"] , "submit_job_application")
 graph.add_conditional_edges(
     "resolve_application_url",
-    route_after_resolving_url,
-    {
-        "tool_node": "tool_node",
-        "perform_login": "perform_login",
-        "submit_job_application": "submit_job_application",
-        "update_job_status": "update_job_status",
-        "human_in_the_loop": "human_in_the_loop"
-    },
+    route_after_resolving_url
 )
+graph.add_conditional_edges(
+    "update_job_status",
+    route_after_job_status_update
+)
+
 
 graph.add_conditional_edges(
     "submit_job_application",
-    submit_application_decision,
-    {
-        "tool_node": "tool_node",
-        "perform_login": "perform_login",
-        "build_verify_job_status_messages": "build_verify_job_status_messages",
-        "human_in_the_loop": "human_in_the_loop",
-        "update_job_status": "update_job_status",
-    },
+    submit_application_decision
 )
 
 graph.add_edge("build_verify_job_status_messages", "verify_job_status")
 
 
-graph.add_conditional_edges(
+graph.add_conditional_edges(    
     "verify_job_status",
-    route_after_verification,
-    {
-        "tool_node": "tool_node",
-        "update_job_status": "update_job_status",
-    },
+    route_after_verification
 )
 
 graph.add_conditional_edges(
     "tool_node",
     lambda state: state["tool_call_origin"],
     {
-        "user_request_llm_node": "user_request_llm_node",
+        "understand_user_request_node": "understand_user_request_node",
         "is_job_valid": "is_job_valid",
         "resolve_application_url": "resolve_application_url",
         "perform_login": "perform_login",

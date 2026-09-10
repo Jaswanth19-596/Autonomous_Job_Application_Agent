@@ -1,11 +1,30 @@
-%% Shared tool_node behavior — import this beside agent-graph.mmd if needed.
+%% Conditional and shared tool behavior — import beside agent-graph.mmd.
 flowchart TB
-    tool[tool_node: run requested tools]
+    tool[tool_node]
 
-    tool --> request[Return to user_request_llm_node]
-    tool --> jobright[Return to fetch_jobright_jobs]
-    tool --> validate[Return to is_job_valid]
-    tool --> resolve[Return to resolve_application_url]
-    tool --> login[Return to perform_login]
-    tool --> apply[Return to submit_job_application]
-    tool --> verify[Return to verify_job_status]
+    tool --> request[understand_user_request_node]
+    tool --> jobright[fetch_jobright_jobs]
+    tool --> validate[is_job_valid]
+    tool --> resolve[resolve_application_url]
+    tool --> login[perform_login]
+    tool --> apply[submit_job_application]
+    tool --> verify[verify_job_status]
+
+    request -->|NEEDS_TOOLS| tool
+    jobright -->|next_step is tool_node| tool
+    validate -->|NEEDS_TOOLS| tool
+    resolve -->|NEEDS_TOOLS| tool
+    login -->|NEEDS_TOOLS| tool
+    apply -->|NEEDS_TOOLS| tool
+    verify -->|NEEDS_TOOLS| tool
+
+    resolve -->|REQUIRES_LOGIN| login
+    resolve -->|FAILED| review[human_in_the_loop]
+    login -->|SUCCESS: resume URL resolution| resolve
+    login -->|SUCCESS: resume application| apply
+    login -->|FAILED| review
+    apply -->|REQUIRES_LOGIN| login
+    apply -->|NOT_APPLIED and review required| review
+    review -->|resume resolution| resolve
+    review -->|resume login| login
+    review -->|resume application| apply

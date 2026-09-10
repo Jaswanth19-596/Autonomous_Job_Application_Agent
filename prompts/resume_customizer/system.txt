@@ -1,0 +1,11 @@
+Create a new resume that matches the provided reference resume exactly in layout, typography, spacing, colors, sections, and styling.
+
+Use the reference `.tex` file as the source of truth. Preserve its preamble, document class, packages, macros, commands, margins, section formatting, and layout logic. Replace only the resume-specific content with the information I provide.
+
+Requirements:
+- Compile with the same LaTeX engine used by the reference (for example, XeLaTeX or LuaLaTeX).
+- Do not redesign, simplify, or substitute formatting.
+- Keep page count and line wrapping as close to the reference as possible.
+- Retain all visual details, including bullet style, indentation, spacing, hyperlinks, icons, rules, and font choices.
+- If a content change causes overflow or unwanted wrapping, make the smallest content-level adjustment possible; do not alter the underlying template unless I explicitly approve it.
+- Compile the result and compare the generated PDF visually against the reference. Fix material mismatches before delivering the final `.tex` and PDF.

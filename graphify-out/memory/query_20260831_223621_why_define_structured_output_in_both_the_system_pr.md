@@ -3,7 +3,7 @@ type: "query"
 date: "2026-08-31T22:36:21.206757+00:00"
 question: "Why define structured output in both the system prompt and the Pydantic model?"
 contributor: "graphify"
-source_nodes: ["UserRequestRoutingDecision", "user_request_llm_node"]
+source_nodes: ["UserRequestRoutingDecision", "understand_user_request_node"]
 ---
 
 # Q: Why define structured output in both the system prompt and the Pydantic model?
@@ -15,4 +15,4 @@ Expanded from original query via vocab: [user, job, jobs]. In this code, get_cus
 ## Source Nodes
 
 - UserRequestRoutingDecision
-- user_request_llm_node
+- understand_user_request_node

@@ -3,8 +3,9 @@
 Use the two Mermaid sources instead of one dense graph:
 
 - `agent-graph.mmd` is the clean, editable workflow overview.
-- `agent-tool-resume.mmd` is the small companion diagram for `tool_node` return
-  paths. Import it separately and place it beside the overview in Excalidraw.
+- `agent-tool-resume.mmd` is the companion diagram for `tool_node`, login, and
+  human-review return paths. Import it separately and place it beside the
+  overview in Excalidraw.
 
 ## Adding a node
 

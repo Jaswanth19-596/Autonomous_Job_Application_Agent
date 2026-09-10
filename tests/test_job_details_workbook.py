@@ -20,7 +20,7 @@ class JobDetailsWorkbookTests(unittest.TestCase):
         write_result = type("WriteResult", (), {"inserted": 1, "updated": 0})()
 
         with patch.object(nodes, "upsert_job_rows", return_value=write_result) as upsert:
-            nodes.save_job_to_workbook({
+            result = nodes.save_job_to_workbook({
                 "job_details": details,
                 "applied_jobs_path": "/tmp/applied_jobs.xlsx",
                 "job_url": "https://jobs.example.com/roles/123",
@@ -43,6 +43,8 @@ class JobDetailsWorkbookTests(unittest.TestCase):
         self.assertTrue((set(row) - workflow_metadata).issubset(model_fields))
         self.assertEqual(row["title"], "Backend Engineer")
         self.assertEqual(row["companyName"], "Example Co")
+        self.assertEqual(result, {"job_details": row})
+        self.assertTrue(result["job_details"]["id"])
 
     def test_removed_model_fields_remain_blank_in_the_workbook(self):
         details = JobDetailsModel(

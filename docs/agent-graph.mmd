@@ -1,51 +1,42 @@
-%% Main workflow overview — designed for Mermaid-to-Excalidraw conversion.
-%% Detailed shared-tool wiring is in agent-tool-resume.mmd.
+%% Agent overview — import this first. Conditional tool paths are separate.
 flowchart LR
-    start([START]) --> init[Initialize user data]
-    init --> input[Collect user request]
-    input --> intent{Understand request}
+    start([START]) --> init[initialize_user_data]
+    init --> input[collect_user_request]
+    input --> request{understand_user_request_node}
 
-    intent -->|Chat| input
-    intent -->|End| finish([END])
-    intent -->|Find JobRight jobs| jobright[Fetch JobRight jobs]
-    jobright -->|More jobs or tools needed| jobright
-    jobright -->|Finished| input
+    request -->|CHAT| input
+    request -->|END| finish([END])
+    request -->|JOBRIGHT_JOBS| jobright[fetch_jobright_jobs]
+    jobright -->|collect more| jobright
+    jobright -->|complete| input
 
-    intent -->|Single job URL| details[Extract job details]
-    details --> save[Save job to workbook]
+    request -->|NEW_JOB_URL| validation_context[build_validation_messages]
+    request -->|APPLY_FOR_JOBS| queue[prepare_job_application_queue]
+    queue --> dispatch{dispath_job}
+    dispatch -->|job selected| extract[extract_job_details]
+    dispatch -->|queue empty| input
 
-    intent -->|Apply to saved jobs| queue[Build application queue]
-    queue --> dispatch[Choose next queued job]
-    dispatch -->|Job available| validate_context[Build validation context]
-    dispatch -->|Queue empty| input
-
-    save --> validate_context
-
-    subgraph application[Application flow for the current job]
-        direction LR
-        validate_context --> validate{Validate job}
-        validate -->|Not eligible| status[Update job status]
-        validate -->|Eligible| resolve{Resolve application URL}
-
-        resolve -->|URL ready| apply{Submit application}
-        resolve -->|Login needed| login{Perform login}
-        resolve -->|Cannot resolve| review[Human review]
-
-        login -->|Login succeeds| resolve
-        login -->|Login fails| review
-
-        apply -->|Applied| verify_context[Build verification context]
-        verify_context --> verify{Verify application}
-        verify -->|Confirmed or not confirmed| status
-        apply -->|Not applied| status
-        apply -->|Needs human help| review
-
-        review -->|Resume URL resolution| resolve
-        review -->|Resume login| login
-        review -->|Resume application| apply
+    subgraph job[Current-job preparation]
+        direction TB
+        validation_context --> valid{is_job_valid}
+        valid -->|ELIGIBLE| extract
+        valid -->|NOT_ELIGIBLE| status[update_job_status]
+        extract --> save[save_job_to_workbook]
+        save --> resolve{resolve_application_url}
+        save --> customize[customize_resume]
+        resolve --> apply{submit_job_application}
+        customize --> apply
     end
 
-    status -->|More queued jobs| dispatch
-    status -->|No queued jobs| input
+    subgraph completion[Application completion]
+        direction TB
+        apply -->|APPLIED| verify_context[build_verify_job_status_messages]
+        verify_context --> verify{verify_job_status}
+        verify -->|APPLIED or NOT_APPLIED| status
+        apply -->|NOT_APPLIED| status
+    end
 
-    tool_note["Tool calls are shown separately in agent-tool-resume.mmd"]
+    status -->|more queued jobs| dispatch
+    status -->|queue empty| input
+
+    tool_note["Tool calls and conditional error / login paths: agent-tool-resume.mmd"]

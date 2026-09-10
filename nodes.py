@@ -28,12 +28,15 @@ from prompts import load_prompt
 from utilities.opencode import OPENCODE_USER_AGENT, opencode_session_headers
 from utilities import (
     await_with_progress,
+    compile_resume_pdf,
     get_jobs,
     llm_logger_handler,
     log_node_stage,
     log_tool_calls,
     log_tool_result,
     log_workflow_event,
+    resume_latex_source,
+    safe_resume_filename_part,
     trace_node,
     update_job_status as update_job_status_tool,
 )
@@ -152,30 +155,6 @@ tools_by_name = {
 logger = logging.getLogger(__name__)
 
 
-# def blocked_application_keyboard_action(tool_name: str, tool_args: object) -> str | None:
-#     """Reject keyboard sequences that can append an email instead of replacing it.
-
-#     Chrome DevTools' ``type_text`` is keyboard typing, not a field-targeted
-#     replacement. Application emails must use ``fill`` or ``fill_form``, which
-#     target a UID and overwrite the field value.
-#     """
-#     if not isinstance(tool_args, dict):
-#         return None
-
-#     if tool_name == "type_text" and "@" in str(tool_args.get("text", "")):
-#         return (
-#             "Blocked unsafe email keyboard entry. Use fill or fill_form with "
-#             "the email input's current snapshot UID; those tools replace the "
-#             "entire existing value."
-#         )
-#     if tool_name == "press_key" and tool_args.get("key") in {"Control+A", "Meta+A"}:
-#         return (
-#             "Blocked select-all shortcut while completing an application. Use "
-#             "fill or fill_form with the ordinary field's UID to replace its value."
-#         )
-#     return None
-
-
 async def shutdown_mcp_tools():
     """Stop the manager-owned persistent MCP sessions after a workflow run."""
     await mcp_manager.stop()
@@ -206,10 +185,27 @@ def initialize_user_data(state):
     # Load resume text
     resume_data = (project_root / "user/resume.txt").read_text(encoding="utf-8")
 
+    # Load every project brief. Keeping the filename with its content gives
+    # downstream resume-customization prompts clear boundaries between projects.
+    projects_dir = project_root / "user/projects"
+    if not projects_dir.is_dir():
+        raise FileNotFoundError(f"Projects directory not found: {projects_dir}")
+    projects = "\n\n".join(
+        f"# {project_file.relative_to(projects_dir)}\n\n"
+        f"{project_file.read_text(encoding='utf-8')}"
+        for project_file in sorted(path for path in projects_dir.rglob("*") if path.is_file())
+    )
+
     # Resolve resume PDF path
     resume_file_path = project_root / "user/resume.pdf"
     if not resume_file_path.is_file():
         raise FileNotFoundError(f"Resume file not found: {resume_file_path}")
+
+    reference_resume_path = project_root / "user/master_resume.tex"
+    if not reference_resume_path.is_file():
+        raise FileNotFoundError(
+            f"Resume LaTeX template not found: {reference_resume_path}"
+        )
 
     # Excel workbook path
     applied_jobs_path = str(project_root / "data/applied_jobs.xlsx")
@@ -223,19 +219,12 @@ def initialize_user_data(state):
     return {
         "user_profile": user_profile,
         "resume_data": resume_data,
+        "projects": projects,
         "resume_file_path": str(resume_file_path),
+        "reference_resume_path": str(reference_resume_path),
         "applied_jobs_path": applied_jobs_path,
         "pending_jobs_path": pending_jobs_path,
-        "messages": [system_message],
-        "submit_job_application_messages": [
-            {'role': 'system', 'content': load_prompt("apply_for_job/system.txt")},
-            {'role':'user', 'content': load_prompt(
-                "apply_for_job/user.txt",
-                user_profile=json.dumps(user_profile),
-                resume_data=resume_data,
-                resume_file_path=str(resume_file_path),
-            )},
-        ]
+        "messages": [system_message]
     }
 
 
@@ -329,9 +318,9 @@ async def collect_user_request(state):
 
 
 @trace_node
-async def user_request_llm_node(state):
+async def understand_user_request_node(state):
     # Logging
-    node_name = "user_request_llm_node"
+    node_name = "understand_user_request_node"
     log_node_stage(node_name, "Started — agent is thinking")
 
     # Defining model
@@ -355,7 +344,7 @@ async def user_request_llm_node(state):
         )
         return {
             "user_node_decision": "NEEDS_TOOLS",
-            "tool_call_origin": "user_request_llm_node",
+            "tool_call_origin": "understand_user_request_node",
             "messages": [response]
         }
 
@@ -666,7 +655,7 @@ async def extract_job_details(state):
         await browser.close()
 
     return {
-        "job_details": job_details
+        "job_details": job_details.model_dump()
     }
 
 
@@ -678,47 +667,42 @@ def save_job_to_workbook(state):
 
     # Getting the arguments
     job_details = state["job_details"]
-    applied_jobs_path = state["applied_jobs_path"]
     if hasattr(job_details, "model_dump"):
-        model_fields = set(type(job_details).model_fields)
-        job_dict = job_details.model_dump(exclude_none=True)
+        job_details = job_details.model_dump(exclude_none=True)
     else:
-        # Non-Pydantic values are supported for graph state restoration and
-        # tests. Their supplied keys are the only fields eligible for writing.
-        job_dict = dict(job_details)
-        model_fields = set(job_dict)
+        job_details = {
+            field: value for field, value in dict(job_details).items() if value is not None
+        }
+    applied_jobs_path = state["applied_jobs_path"]
 
-    # Do not manufacture blank legacy fields: only fields defined by the
-    # current JobDetails model and supported by the workbook schema are saved.
+    # creating the excel row
     row = {
         field: value
-        for field, value in job_dict.items()
-        if field in model_fields and field in JOB_COLUMNS
+        for field, value in job_details.items()
+        if field in JOB_COLUMNS
     }
 
-    # ``id`` is workflow metadata, not extracted job detail. Use the supplied
-    # URL only for identity generation; do not write it as ``link`` unless the
-    # Pydantic model itself defines that field.
+    # creating the identity record
     identity_record = {
         **row,
-        "link": job_dict.get("link") or state.get("job_url", ""),
+        "link": job_details.get("link") or state.get("job_url", ""),
         "applyUrl": row.get("applyUrl") or state.get("actual_job_url", ""),
     }
+
     row["id"] = canonical_job_id(identity_record)
+
     if not row["id"]:
-        raise ValueError("Cannot save a user-supplied job without a stable job URL or ID.")
+        raise ValueError("Could not generate a stable job ID.")
+
     row["application_status"] = "Not Applied"
     row["fetched_at"] = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-    for column in APPLICATION_METRIC_COLUMNS:
-        row[column] = ""
 
-    application_fields = {
-        "application_status", "status", "reason", *APPLICATION_METRIC_COLUMNS,
-    }
     write_result = upsert_job_rows(
-        Path(applied_jobs_path), [row], preserve_existing=application_fields,
+        Path(applied_jobs_path), [row]
     )
     action = "inserted" if write_result.inserted else "updated"
+
+    # Remove the job from pending jobs list
     pending_url = str(state.get("job_url") or "").strip()
     removed_pending_jobs = 0
     if pending_url and state.get("pending_jobs_path"):
@@ -726,12 +710,13 @@ def save_job_to_workbook(state):
             Path(state["pending_jobs_path"]), pending_url,
         )
 
+    # Logging
     log_node_stage(
         node_name,
         f"Completed — job {action} in applied jobs; removed {removed_pending_jobs} pending job(s)",
     )
 
-    return {}
+    return {"job_details": row}
 
 
 @trace_node
@@ -800,8 +785,74 @@ async def is_job_valid(state):
     decision = structured_response.decision
     return {
         "validation_phase": "ELIGIBLE" if decision.valid_job == "YES" else "NOT_ELIGIBLE",
-        "final_status_message": getattr(decision, "invalid_job_reason", ""),
+        "final_status_message": decision.invalid_job_reason if decision.valid_job == "NO" else "",
         "is_applied": False,
+    }
+
+
+@trace_node
+async def customize_resume(state):
+    node_name = "customize_resume"
+    log_node_stage(node_name, "Started — customizing resume")
+
+    job_details = state.get("job_details")
+    resume_data = state.get("resume_data")
+    projects = state.get("projects")
+
+    reference_resume_path = Path(
+        state.get("reference_resume_path")
+        or Path(__file__).resolve().parent / "user/master_resume.tex"
+    )
+    if not reference_resume_path.is_file():
+        raise FileNotFoundError(
+            f"Resume LaTeX template not found: {reference_resume_path}"
+        )
+
+    system_prompt = load_prompt("resume_customizer/system.txt")
+    user_prompt = load_prompt(
+        "resume_customizer/user.txt",
+        job_description = job_details.get("description", ""),
+        responsibilities = job_details.get("responsibilities", ""),
+        required_skills = job_details.get("required_skills", ""),
+        preferred_skills = job_details.get("preferred_skills", ""),
+        resume_text = resume_data,
+        projects=projects,
+        job_title = job_details.get("title", ""),
+        company = job_details.get("company", ""),
+        reference_resume_tex=reference_resume_path.read_text(encoding="utf-8"),
+    )
+
+    model_with_tools = await get_custom_model_with_tools([])
+
+    response = await model_with_tools.ainvoke([
+        {'role': 'system', 'content': system_prompt},
+        {'role': 'user', 'content': user_prompt}
+    ])
+
+    # Save the generated source and compile the matching PDF beside it.
+    company = safe_resume_filename_part(job_details.get("company", ""))
+    title = safe_resume_filename_part(job_details.get("title", ""))
+    tex_path = Path("resumes") / f"{company}_{title}.tex"
+    tex_path.parent.mkdir(parents=True, exist_ok=True)
+    latex_source = resume_latex_source(visible_response_text(response.content))
+    tex_path.write_text(latex_source, encoding="utf-8")
+
+    pdf_path = await compile_resume_pdf(
+        tex_path,
+        latex_engine=state.get("latex_engine", "xelatex"),
+    )
+
+    return {
+        "customized_resume_path": str(pdf_path),
+        "submit_job_application_messages": [
+            {'role': 'system', 'content': load_prompt("apply_for_job/system.txt")},
+            {'role':'user', 'content': load_prompt(
+                "apply_for_job/user.txt",
+                user_profile=json.dumps(state.get("user_profile")),
+                resume_data=state.get("resume_data"),
+                resume_file_path=str(pdf_path),
+            )},
+        ]
     }
 
 @trace_node
@@ -1186,16 +1237,21 @@ async def update_job_status(state):
     node_name = "update_job_status"
     log_node_stage(node_name, "Started — updating the job status")
 
-    job_details = state.get("job_details", {})
-    if hasattr(job_details, "model_dump"):
-        job_details = job_details.model_dump()
 
-    job_record = {
-        **job_details,
-        "link": job_details.get("link") or state.get("job_url", ""),
-        "applyUrl": job_details.get("applyUrl") or state.get("actual_job_url", ""),
-    }
-    job_id = canonical_job_id(job_record)
+    # If the job itself is invalid
+    if state['validation_phase'] == "NOT_ELIGIBLE":
+        reason = state['final_status_message']
+
+        # insert into invalid_jobs.xlsx file 
+        df = pd.read_excel("invalid_jobs.xlsx")
+        df.append({"job_id": job_id, "reason": reason}, ignore_index=True)
+        df.to_excel("invalid_jobs.xlsx", index=False)
+        return {}
+
+    # If the job is valid, but applying is unsuccessful
+    job_details = state.get("job_details", {})
+    job_id = job_details["id"]
+
     if not job_id:
         raise ValueError("Cannot update job status because the job has no stable ID.")
 

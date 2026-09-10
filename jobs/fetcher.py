@@ -31,14 +31,6 @@ JOB_COLUMNS = (
     "application_status",
     "fetched_at",
     "jobboard",
-    "model",
-    "status",
-    "reason",
-    "application_started_at",
-    "application_finished_at",
-    "application_duration_seconds",
-    "application_tool_calls",
-    "application_cost_usd",
 )
 
 APPLICATION_METRIC_COLUMNS = (

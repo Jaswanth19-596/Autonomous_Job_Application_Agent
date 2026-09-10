@@ -22,7 +22,7 @@ def route_user_request(state: dict[str, Any]) -> str:
     destinations = {
         "NEEDS_TOOLS": "tool_node",
         "CHAT": "collect_user_request",
-        "NEW_JOB_URL": "extract_job_details",
+        "NEW_JOB_URL": "build_validation_messages",
         "JOBRIGHT_JOBS": "fetch_jobright_jobs",
         "APPLY_FOR_JOBS": "prepare_job_application_queue",
         "END": "END",
@@ -33,7 +33,7 @@ def route_user_request(state: dict[str, Any]) -> str:
         raise ValueError(f"Unsupported user-request phase: {next_node}") from exc
 
     log_workflow_event(
-        "route user_request_llm_node",
+        "route understand_user_request_node",
         phase=next_node,
         destination=destination,
     )
@@ -42,7 +42,7 @@ def route_user_request(state: dict[str, Any]) -> str:
 
 def route_after_validation(state: dict[str, Any]) -> str:
     if state["validation_phase"] == "ELIGIBLE":
-        destination = "resolve_application_url"
+        destination = "extract_job_details"
     elif state["validation_phase"] == "NOT_ELIGIBLE":
         destination = "update_job_status"
     elif state["validation_phase"] == "NEEDS_TOOLS":
@@ -95,7 +95,7 @@ def route_after_login(state: dict[str, Any]) -> str:
 
 def route_after_dispatch(state: dict[str, Any]) -> str:
     """Start validation for the current queued job, or return to chat when exhausted."""
-    destination = "extract_job_details" if state.get("current_job") is not None else "collect_user_request"
+    destination = "build_validation_messages" if state.get("current_job") is not None else "collect_user_request"
     log_workflow_event(
         "route dispath_job",
         has_next_job=state.get("has_next_job", False),

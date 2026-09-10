@@ -3,7 +3,7 @@ type: "query"
 date: "2026-08-31T22:29:34.277536+00:00"
 question: "Should the LLM show the jobs after get_jobs returns them, rather than only say it found them?"
 contributor: "graphify"
-source_nodes: ["get_jobs()", "UserRequestRoutingDecision", "user_request_llm_node"]
+source_nodes: ["get_jobs()", "UserRequestRoutingDecision", "understand_user_request_node"]
 ---
 
 # Q: Should the LLM show the jobs after get_jobs returns them, rather than only say it found them?
@@ -16,4 +16,4 @@ Expanded from original query via vocab: [user, job, jobs]. Yes. The run shows th
 
 - get_jobs()
 - UserRequestRoutingDecision
-- user_request_llm_node
+- understand_user_request_node

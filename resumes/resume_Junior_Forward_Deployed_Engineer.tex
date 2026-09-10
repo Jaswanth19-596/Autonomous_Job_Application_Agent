@@ -1,0 +1,129 @@
+\documentclass[10pt, letterpaper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[margin=0.35in]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+
+% Color definitions
+\definecolor{primary}{RGB}{30, 41, 59}       % Dark slate header/titles
+\definecolor{linkcolor}{RGB}{37, 99, 235}    % Professional link blue
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkcolor,
+    urlcolor=linkcolor,
+    pdfauthor={Jaswanth Mada},
+    pdftitle={Jaswanth Mada - Resume}
+}
+
+% Page style
+\pagestyle{empty}
+\raggedbottom
+\raggedright
+
+% List customization
+\setlist[itemize]{leftmargin=1.1em, label=\small$\bullet$, itemsep=1pt, parsep=0pt, topsep=1pt}
+
+% Section formatting
+\titleformat{\section}
+  {\large\bfseries\color{primary}}
+  {}{0em}{\MakeUppercase}
+  [\color{primary}\hrule height 0.6pt]
+
+\titlespacing*{\section}{0pt}{4pt}{2pt}
+
+\begin{document}
+
+%----------------------------------------------------------------------------------------
+% HEADER
+%----------------------------------------------------------------------------------------
+\begin{center}
+    {\Huge \bfseries \color{primary} JASWANTH MADA} \\[2pt]
+    \small
+    Hammond, IN \quad$\cdot$\quad 
+    219-466-5564 \quad$\cdot$\quad 
+    \href{mailto:madhajaswanth91@gmail.com}{madhajaswanth91@gmail.com} \quad$\cdot$\quad 
+    \href{https://www.linkedin.com/in/jaswanthmadha/}{LinkedIn} \quad$\cdot$\quad 
+    \href{https://github.com/Jaswanth19-596/}{GitHub} \quad$\cdot$\quad 
+    \href{https://madajaswanth.netlify.app/}{Portfolio}
+\end{center}
+
+\vspace{-6pt}
+
+%----------------------------------------------------------------------------------------
+% SUMMARY
+%----------------------------------------------------------------------------------------
+\section{Professional Summary}
+Applied AI / Machine Learning Engineer specializing in multi-agent orchestration, production RAG pipelines, and LLM application development.
+
+%----------------------------------------------------------------------------------------
+% EDUCATION
+%----------------------------------------------------------------------------------------
+\section{Education}
+\textbf{Purdue University Northwest} \hfill Hammond, IN \\
+\textit{Master of Science in Computer Science} \hfill Aug 2023 -- May 2025
+
+%----------------------------------------------------------------------------------------
+% TECHNICAL SKILLS
+%----------------------------------------------------------------------------------------
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+    \item \textbf{Programming \& Core ML:} Python, NumPy, Pandas, Scikit-Learn, PyTorch
+    \item \textbf{Agentic AI \& Orchestration:} CrewAI, Multi-Agent Systems, ReAct Pattern, Planning Pattern, Tool Use, Agent Memory Management, Guardrails \& Output Validation, Human-In-The-Loop, Agent Callbacks
+    \item \textbf{Cloud \& AWS:} EC2, S3, Lambda, API Gateway, SQS, DynamoDB, ElastiCache (Redis), CloudWatch
+    \item \textbf{Databases \& Software Eng:} MySQL, PostgreSQL, DynamoDB, Redis, OOP, Data Structures \& Algorithms, Design Patterns, Multithreading, Concurrency
+    \item \textbf{LLMs \& Retrieval Systems:} RAG, LangChain, Pinecone, Prompt Engineering, Embedding-Based Search
+\end{itemize}
+
+%----------------------------------------------------------------------------------------
+% EXPERIENCE
+%----------------------------------------------------------------------------------------
+\section{Experience}
+\textbf{Accessifiers} \hfill Hammond, IN \\
+\textit{Machine Learning Engineer} \hfill Aug 2025 -- Jun 2026
+\begin{itemize}
+    \item Engineered an internal LLM-powered document Q\&A system using Python, LangChain, and Pinecone, reducing time spent on policy and technical document lookups by \textbf{35\%} for research and engineering users.
+    \item Implemented a scalable document ingestion and chunking pipeline on AWS (S3, Lambda) to process and refresh \textbf{100K+ pages} of PDFs and markdown content with consistent retrieval behavior.
+    \item Optimized prompt templates, retrieval depth, and citation logic using OpenAI APIs and prompt versioning, cutting irrelevant or partially grounded responses by \textbf{25\%} in internal validation.
+    \item Automated testing and deployment workflows with GitHub Actions and pytest, validating prompt changes and retrieval outputs while lowering release-related issues by \textbf{30\%}.
+    \item Instrumented latency, token usage, and error metrics using CloudWatch and logging, keeping average response time under \textbf{3 seconds} while managing inference cost during peak usage.
+\end{itemize}
+
+%----------------------------------------------------------------------------------------
+% PROJECTS
+%----------------------------------------------------------------------------------------
+\section{Projects}
+\textbf{Autonomous Multi-Agent Job Application System} \hfill \href{https://github.com/Jaswanth19-596/Autonomous_Multi_Agent_Job_Application_System}{[GitHub Repository]} \\
+\textit{Python, LangGraph, MCP, Playwright, OpenRouter, Apify}
+\begin{itemize}
+    \item Engineered a hierarchical multi-agent framework using LangGraph to automate end-to-end job applications, implementing a sequential Manager-Worker state machine with deterministic fallback for CAPTCHAs and scam detection.
+    \item Reduced LLM token overhead by implementing an active memory-management pipeline that prunes heavy DOM payloads from context windows beyond 18 conversation turns while preserving critical action history.
+    \item Integrated MCP-based browser and Gmail tooling with asynchronous session management, dynamic tool discovery, timeout handling, graceful server recovery, and human-in-the-loop interaction for unknown application questions.
+    \item Built a resilient tool-execution runtime with human-in-the-loop approval gates for high-risk actions, automatic exception recovery, and asynchronous MCP tool resolution.
+\end{itemize}
+
+\textbf{Agentic Content Writing System} \\
+\textit{Python, CrewAI, LangChain, OpenAI APIs}
+\begin{itemize}
+    \item Built a production-grade Multi-Agent content writing system, evolving from a single-agent baseline to a fully orchestrated, multi-role crew applying core agentic AI patterns in a unified implementation.
+    \item Implemented the ReAct (Reasoning + Acting) pattern, enabling agents to reason step-by-step, dynamically select tools, and self-correct before producing outputs, reducing hallucinations and improving task reliability.
+    \item Designed a multi-agent crew with specialized roles (Researcher, Writer, Editor) using hierarchical/sequential process modes with inter-agent task delegation and context passing.
+    \item Implemented guardrails and validation layers to intercept malformed outputs, trigger retry logic, and enforce editorial constraints such as word count bounds before output propagation.
+    \item Managed short-term, long-term, entity, and contextual memory across agent interactions, enabling the crew to retain context across tasks and reduce redundant information retrieval.
+\end{itemize}
+
+%----------------------------------------------------------------------------------------
+% ACHIEVEMENTS
+%----------------------------------------------------------------------------------------
+\section{Achievements}
+\begin{itemize}
+    \item \textbf{ICPC:} Ranked \textbf{43rd} out of 89 teams in the USA Mid-Center Regional ICPC Contest.
+    \item \textbf{IEEE Xtreme:} Ranked \textbf{29th} out of 149 teams in the 18th Annual Global IEEE Xtreme Programming Competition.
+\end{itemize}
+
+\end{document}

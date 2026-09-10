@@ -1,0 +1,20 @@
+Return only one complete, compilable LaTeX document. Do not include Markdown fences, explanations, or text before or after the document.
+
+Use this reference template as the source of truth. Preserve its preamble, document class, packages, macros, and layout; tailor only the resume content to the job.
+
+REFERENCE TEMPLATE
+{reference_resume_tex}
+
+TARGET JOB
+Company: {company}
+Title: {job_title}
+Description: {job_description}
+Responsibilities: {responsibilities}
+Required skills: {required_skills}
+Preferred skills: {preferred_skills}
+
+CANDIDATE RESUME
+{resume_text}
+
+PROJECT BRIEFS
+{projects}
