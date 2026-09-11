@@ -135,6 +135,8 @@ def route_after_verification(state: dict[str, Any]) -> str:
         destination = "update_job_status"
     elif state["verification_phase"] == "NEEDS_TOOLS":
         destination = "tool_node"
+    elif state["verification_phase"] == "FAILED":
+        destination = "verify_job_status"
     else:
         raise ValueError(f"Unsupported verification phase: {state['verification_phase']}")
     log_workflow_event(

@@ -29,7 +29,8 @@ from utilities.opencode import OPENCODE_USER_AGENT, opencode_session_headers
 from utilities import (
     await_with_progress,
     compile_resume_pdf,
-    get_jobs,
+    get_pending_or_invalid_jobs,
+    get_applied_jobs,
     llm_logger_handler,
     log_node_stage,
     log_tool_calls,
@@ -108,7 +109,7 @@ async def get_custom_model_with_tools(tool_list, config: RunnableConfig | None =
 
     tools = [*mcp_tools]
     if "custom" in tool_list:
-        tools.append(get_jobs)
+        tools.extend((get_applied_jobs, get_pending_or_invalid_jobs))
     return model.bind_tools(tools=tools, extra_headers=headers)
 
 def _with_go_structured_output(schema, config: RunnableConfig | None = None):
@@ -116,9 +117,10 @@ def _with_go_structured_output(schema, config: RunnableConfig | None = None):
     return model.with_structured_output(
         schema,
         method="function_calling",
-        # Muse Spark's Responses API accepts only automatic tool selection.
-        # The structured-output prompt still requires the returned schema tool.
         tool_choice="auto",
+        # # Muse Spark's Responses API accepts only automatic tool selection.
+        # # The structured-output prompt still requires the returned schema tool.
+        # tool_choice="required",
         extra_headers=opencode_session_headers(config),
     )
 
@@ -147,7 +149,8 @@ def get_custom_structured_model(model_type, config: RunnableConfig | None = None
 
 
 tools_by_name = {
-    "get_jobs": get_jobs,
+    "get_applied_jobs": get_applied_jobs,
+    "get_pending_or_invalid_jobs": get_pending_or_invalid_jobs,
 }
 
 
@@ -164,70 +167,6 @@ def is_http_job_url(value: str) -> bool:
     """Return whether a routing decision contains a usable job-posting URL."""
     parsed = urlparse(value.strip())
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
-
-
-@trace_node
-def initialize_user_data(state):
-    """Load user profile, resume, and file paths so the graph is self-contained.
-
-    This node runs first, making the graph work both from main() and
-    LangGraph Studio without requiring external input.
-    """
-    node_name = "initialize_user_data"
-    log_node_stage(node_name, "Started — loading user data")
-
-    project_root = Path(__file__).resolve().parent
-
-    # Load user profile
-    with (project_root / "user/user_profile.json").open(encoding="utf-8") as f:
-        user_profile = json.load(f)
-
-    # Load resume text
-    resume_data = (project_root / "user/resume.txt").read_text(encoding="utf-8")
-
-    # Load every project brief. Keeping the filename with its content gives
-    # downstream resume-customization prompts clear boundaries between projects.
-    projects_dir = project_root / "user/projects"
-    if not projects_dir.is_dir():
-        raise FileNotFoundError(f"Projects directory not found: {projects_dir}")
-    projects = "\n\n".join(
-        f"# {project_file.relative_to(projects_dir)}\n\n"
-        f"{project_file.read_text(encoding='utf-8')}"
-        for project_file in sorted(path for path in projects_dir.rglob("*") if path.is_file())
-    )
-
-    # Resolve resume PDF path
-    resume_file_path = project_root / "user/resume.pdf"
-    if not resume_file_path.is_file():
-        raise FileNotFoundError(f"Resume file not found: {resume_file_path}")
-
-    reference_resume_path = project_root / "user/master_resume.tex"
-    if not reference_resume_path.is_file():
-        raise FileNotFoundError(
-            f"Resume LaTeX template not found: {reference_resume_path}"
-        )
-
-    # Excel workbook path
-    applied_jobs_path = str(project_root / "data/applied_jobs.xlsx")
-    pending_jobs_path = str(project_root / "data/pending_jobs.xlsx")
-
-    # System prompt for the chat node
-    system_message = {"role": "system", "content": load_prompt("chat_with_user/system.txt")}
-
-    log_node_stage(node_name, "Completed — user data loaded")
-
-    return {
-        "user_profile": user_profile,
-        "resume_data": resume_data,
-        "projects": projects,
-        "resume_file_path": str(resume_file_path),
-        "reference_resume_path": str(reference_resume_path),
-        "applied_jobs_path": applied_jobs_path,
-        "pending_jobs_path": pending_jobs_path,
-        "messages": [system_message]
-    }
-
-
 
 @trace_node
 async def tool_node(state):
@@ -293,6 +232,75 @@ async def tool_node(state):
         return {message_key: [*messages, *tool_messages]}
     return {message_key: tool_messages}
     
+
+
+
+
+
+
+@trace_node
+def initialize_user_data(state):
+    """Load user profile, resume, and file paths so the graph is self-contained.
+
+    This node runs first, making the graph work both from main() and
+    LangGraph Studio without requiring external input.
+    """
+    node_name = "initialize_user_data"
+    log_node_stage(node_name, "Started — loading user data")
+
+    project_root = Path(__file__).resolve().parent
+
+    # Load user profile
+    with (project_root / "user/user_profile.json").open(encoding="utf-8") as f:
+        user_profile = json.load(f)
+
+    # Load resume text
+    resume_data = (project_root / "user/resume.txt").read_text(encoding="utf-8")
+
+    # Load every project brief. Keeping the filename with its content gives
+    # downstream resume-customization prompts clear boundaries between projects.
+    projects_dir = project_root / "user/projects"
+    if not projects_dir.is_dir():
+        raise FileNotFoundError(f"Projects directory not found: {projects_dir}")
+    projects = "\n\n".join(
+        f"# {project_file.relative_to(projects_dir)}\n\n"
+        f"{project_file.read_text(encoding='utf-8')}"
+        for project_file in sorted(path for path in projects_dir.rglob("*") if path.is_file())
+    )
+
+    # Resolve resume PDF path
+    resume_file_path = project_root / "user/resume.pdf"
+    if not resume_file_path.is_file():
+        raise FileNotFoundError(f"Resume file not found: {resume_file_path}")
+
+    reference_resume_path = project_root / "user/master_resume.tex"
+    if not reference_resume_path.is_file():
+        raise FileNotFoundError(
+            f"Resume LaTeX template not found: {reference_resume_path}"
+        )
+
+    # Excel workbook path
+    applied_jobs_path = str(project_root / "data/applied_jobs.xlsx")
+    pending_jobs_path = str(project_root / "data/pending_jobs.xlsx")
+
+    # System prompt for the chat node
+    system_message = {"role": "system", "content": load_prompt("chat_with_user/system.txt")}
+
+    log_node_stage(node_name, "Completed — user data loaded")
+
+    return {
+        "user_profile": user_profile,
+        "resume_data": resume_data,
+        "projects": projects,
+        "resume_file_path": str(resume_file_path),
+        "reference_resume_path": str(reference_resume_path),
+        "applied_jobs_path": applied_jobs_path,
+        "pending_jobs_path": pending_jobs_path,
+        "messages": [system_message]
+    }
+
+
+
 
 
 @trace_node
@@ -423,7 +431,7 @@ async def prepare_job_application_queue(state):
     tool_args["filters"] = ["Not Applied"]
     log_workflow_event("loading application queue", **tool_args)
 
-    result = await asyncio.to_thread(get_jobs.invoke, tool_args)
+    result = await asyncio.to_thread(get_applied_jobs.invoke, tool_args)
 
     if "error" in result:
         logger.error(f"Error fetching jobs: {result['error']}")
@@ -1211,11 +1219,18 @@ async def verify_job_status(state):
             ),
         },
     ]
-    structured_response = await await_with_progress(
-        node_name,
-        "Agent is recording the verification result",
-        structured_model.ainvoke(structured_messages),
-    )
+
+    structured_response = None
+    for i in range(3):
+        structured_response = await await_with_progress(
+            node_name,
+            "Agent is recording the verification result",
+            structured_model.ainvoke(structured_messages),
+        )
+
+        if structured_response:
+            break
+
     logger.debug("Verification result: %s", structured_response)
 
     return {

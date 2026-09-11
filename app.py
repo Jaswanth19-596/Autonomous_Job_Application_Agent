@@ -180,9 +180,8 @@ graph.add_conditional_edges(
 )
 
 graph.add_edge("extract_job_details", "save_job_to_workbook")
-graph.add_edge("save_job_to_workbook", "resolve_application_url")
 graph.add_edge("save_job_to_workbook", "customize_resume")
-graph.add_edge(["resolve_application_url","customize_resume"] , "submit_job_application")
+graph.add_edge("customize_resume" , "resolve_application_url")
 graph.add_conditional_edges(
     "resolve_application_url",
     route_after_resolving_url
@@ -269,7 +268,7 @@ async def main():
     }
 
     try:
-        result = await workflow.ainvoke({"messages": messages, "requires_human": False}, config = config)
+        result = await workflow.ainvoke({}, config = config)
 
         while "__interrupt__" in result:
             interrupt_data = result["__interrupt__"][0].value

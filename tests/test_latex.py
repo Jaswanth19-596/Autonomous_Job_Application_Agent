@@ -1,7 +1,17 @@
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from prompts import load_prompt
-from utilities.latex import resume_latex_source
+from utilities.latex import compile_resume_pdf, resume_latex_source
+
+
+class _SuccessfulLatexProcess:
+    returncode = 0
+
+    async def communicate(self):
+        return b"", b""
 
 
 class ResumeLatexSourceTests(unittest.TestCase):
@@ -45,3 +55,40 @@ Resume
         self.assertIn("\\documentclass{article}", prompt)
         self.assertIn("Company: Example Co.", prompt)
         self.assertIn("Candidate resume", prompt)
+
+    def test_upload_prompt_uses_the_browser_tool_file_paths_array(self):
+        prompt = Path("prompts/apply_for_job/system.txt").read_text(encoding="utf-8")
+
+        self.assertIn("filePaths=[<resume_file_path>]", prompt)
+        self.assertNotIn("filePath=<resume_file_path>", prompt)
+        self.assertIn("generic resume", prompt)
+        self.assertIn("no generic resume remains", prompt)
+
+
+class ResumeLatexCompileTests(unittest.IsolatedAsyncioTestCase):
+    async def test_compile_returns_an_absolute_pdf_and_removes_auxiliary_files(self):
+        with TemporaryDirectory() as temp_dir:
+            tex_path = Path(temp_dir) / "resume.tex"
+            tex_path.write_text(
+                "\\documentclass{article}\n\\begin{document}\nResume\n\\end{document}\n",
+                encoding="utf-8",
+            )
+
+            async def fake_create_subprocess_exec(*command, **_kwargs):
+                output_dir = Path(
+                    next(arg for arg in command if arg.startswith("-output-directory=")).split("=", 1)[1]
+                )
+                output_dir.mkdir(exist_ok=True)
+                for suffix in (".pdf", ".aux", ".log", ".out"):
+                    (output_dir / f"resume{suffix}").write_bytes(b"output")
+                return _SuccessfulLatexProcess()
+
+            with patch(
+                "utilities.latex.asyncio.create_subprocess_exec",
+                side_effect=fake_create_subprocess_exec,
+            ):
+                pdf_path = await compile_resume_pdf(tex_path, latex_engine="xelatex")
+
+            self.assertTrue(pdf_path.is_absolute())
+            self.assertTrue(pdf_path.is_file())
+            self.assertEqual(list(pdf_path.parent.iterdir()), [pdf_path])

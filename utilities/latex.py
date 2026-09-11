@@ -51,6 +51,9 @@ async def compile_resume_pdf(tex_path: Path, latex_engine: str = "xelatex") -> P
             f"Unsupported LaTeX engine: {latex_engine}. Choose one of {supported}."
         )
 
+    # Browser upload tools run in a separate process, so their file path must
+    # not depend on the application's current working directory.
+    tex_path = tex_path.resolve()
     source = tex_path.read_text(encoding="utf-8")
     # Validate files supplied from outside the resume node, too.
     resume_latex_source(source)
@@ -85,5 +88,11 @@ async def compile_resume_pdf(tex_path: Path, latex_engine: str = "xelatex") -> P
     pdf_path = output_dir / f"{tex_path.stem}.pdf"
     if not pdf_path.is_file():
         raise RuntimeError("LaTeX completed without creating the expected resume PDF.")
+
+    # The build directory is the published-resume directory.  Retain only the
+    # finished PDF, not LaTeX's auxiliary files from either compiler pass.
+    for artifact_path in output_dir.glob(f"{tex_path.stem}.*"):
+        if artifact_path != pdf_path and artifact_path.is_file():
+            artifact_path.unlink()
 
     return pdf_path

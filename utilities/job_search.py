@@ -10,7 +10,7 @@ from workbook.jobs_workbook import get_job_row
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_EXCEL_PATH = _PROJECT_ROOT / "data" / "pending_jobs.xlsx"
+_EXCEL_PATH = _PROJECT_ROOT / "data" / "applied_jobs.xlsx"
 
 _HEAVY_JOB_COLUMNS = {
     "descriptionHtml",
@@ -33,7 +33,7 @@ _HEAVY_JOB_COLUMNS = {
 
 
 @tool
-def get_jobs(
+def get_applied_jobs(
     filters: list[str] | None = None,
     query: str | None = None,
     n: int = 10,

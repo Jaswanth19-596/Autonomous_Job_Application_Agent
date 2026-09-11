@@ -29,7 +29,7 @@ class TestLLMLogger(unittest.TestCase):
             content="Hello! How can I help you today?",
             tool_calls=[
                 {
-                    "name": "get_jobs",
+                    "name": "get_applied_jobs",
                     "args": {"query": "engineer"},
                     "id": "call_123",
                 }
@@ -51,7 +51,7 @@ class TestLLMLogger(unittest.TestCase):
         self.assertIn("You are an assistant.", content)
         self.assertIn("Hello!", content)
         self.assertIn("Hello! How can I help you today?", content)
-        self.assertIn("get_jobs", content)
+        self.assertIn("get_applied_jobs", content)
 
     def test_logs_failed_llm_interaction(self):
         run_id = uuid.uuid4()
