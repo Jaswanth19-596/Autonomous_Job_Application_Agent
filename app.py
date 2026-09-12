@@ -20,8 +20,7 @@ from nodes import (
     shutdown_mcp_tools,
     human_in_the_loop,
     fetch_jobright_jobs,
-    prepare_job_application_queue,
-    dispath_job,
+    dispatch_job,
     customize_resume
 )
 from langgraph.graph.message import MessagesState
@@ -55,29 +54,30 @@ def replace_messages(_existing: list[dict], replacement: list[dict]) -> list[dic
 
 
 class MyState(MessagesState):
-    collect_user_request_messages: Annotated[list[dict], add] = []
     submit_job_application_messages: Annotated[list[dict], add] = []
     is_job_valid_messages: Annotated[list[dict], add] = []
     resolve_application_url_messages: Annotated[list[dict], replace_messages] = []
     perform_login_messages: Annotated[list[dict], replace_messages] = []
     verify_job_status_messages: Annotated[list[dict], add] = []
-    user_profile: str = ""
+    user_profile: dict = {}
     resume_data: str = ""
     resume_file_path: str = ""
     current_state: str = ""
 
     #user request phase output
     job_url: str = ""
-    user_node_decision: Literal["NEEDS_TOOLS", "CHAT", "NEW_JOB_URL", "APPLY_FOR_JOBS", "JOBRIGHT_JOBS", "END"] = "CHAT"
+    user_node_decision: Literal["NEEDS_TOOLS", "CHAT", "APPLY_FOR_JOBS", "FETCH_JOBRIGHT_JOBS", "END"] = "CHAT"
     num_jobs_to_process: int = 0
     job_query_filter: dict[str, Any] | None = None
-    application_queue: list[dict] = list()
+    application_queue: list[str] = list()
+    completed_jobs: Annotated[list[str], add] = []
     current_job: dict = None
     has_next_job: bool = False
 
     #customize resume phase
     job_details: dict = None
     customized_resume_path: str = ""
+    customized_resume: str = ""
     projects: str = ""
     reference_resume_path: str = ""
 
@@ -101,9 +101,12 @@ class MyState(MessagesState):
 
     # Human Review fields
     requires_human: bool = False
-    human_intervention_reason: Literal["CAPTCHA", "OTHER"] | None = None
+    human_intervention_reason: Literal["CAPTCHA", "QUESTION", "SECURITY", "OTHER"] | None = None
+    question_scope: Literal["global", "employer", "job"] = "job"
+    application_recovery_attempts: int = 0
     human_intervention_prompt: str | None = ""
     human_intervention_origin: str = ""
+    human_response: str = ""
 
     # Application completed fields
     validation_phase : Literal["NEEDS_TOOLS", "ELIGIBLE", "NOT_ELIGIBLE", "END"] = "ELIGIBLE"
@@ -111,7 +114,7 @@ class MyState(MessagesState):
     resolution_phase : Literal["NEEDS_TOOLS", "REQUIRES_LOGIN", "SUCCESS", "FAILED"] = "FAILED"
     login_phase: Literal["NEEDS_TOOLS", "SUCCESS", "FAILED"] = "FAILED"
     login_return_node: Literal["resolve_application_url", "submit_job_application", ""] = ""
-    job_application_phase: Literal["NEEDS_TOOLS", "REQUIRES_LOGIN", "APPLIED", "NOT_APPLIED", "END"] = "NOT_APPLIED"
+    job_application_phase: Literal["NEEDS_TOOLS", "CONTINUE", "REQUIRES_LOGIN", "APPLIED", "NOT_APPLIED", "END"] = "NOT_APPLIED"
 
     is_applied: bool = False
     url_applied_on: str = ""
@@ -146,8 +149,7 @@ graph.add_node(understand_user_request_node, retry_policy=retry_policy)
 graph.add_node(build_validation_messages, retry_policy=retry_policy)
 graph.add_node(build_verify_job_status_messages, retry_policy=retry_policy)
 graph.add_node(human_in_the_loop, retry_policy=retry_policy)
-graph.add_node(prepare_job_application_queue, retry_policy=retry_policy)
-graph.add_node(dispath_job, retry_policy=retry_policy)
+graph.add_node(dispatch_job, retry_policy=retry_policy)
 graph.add_node(customize_resume, retry_policy=retry_policy)
 graph.add_edge(START, "initialize_user_data")
 graph.add_edge("initialize_user_data", "collect_user_request")
@@ -163,9 +165,8 @@ graph.add_conditional_edges(
     "perform_login",
     route_after_login
 )
-graph.add_edge("prepare_job_application_queue", "dispath_job")
 graph.add_conditional_edges(
-    "dispath_job",
+    "dispatch_job",
     route_after_dispatch
 )
 graph.add_conditional_edges(

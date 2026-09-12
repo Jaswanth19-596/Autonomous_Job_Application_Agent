@@ -1,4 +1,17 @@
 # Target application
+<job_details>
+{job_details}
+</job_details>
+
+# Customized resume text
+<customized_resume>
+{customized_resume}
+</customized_resume>
+
+# Supporting projects
+<projects>
+{projects}
+</projects>
 
 # User profile and saved answers
 <user_profile>

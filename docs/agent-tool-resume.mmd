@@ -1,30 +1,34 @@
-%% Conditional and shared tool behavior — import beside agent-graph.mmd.
+%% Conditional tool, login, and human-review behavior. Import separately.
 flowchart TB
     tool[tool_node]
 
-    tool --> request[understand_user_request_node]
-    tool --> jobright[fetch_jobright_jobs]
-    tool --> validate[is_job_valid]
-    tool --> resolve[resolve_application_url]
-    tool --> login[perform_login]
-    tool --> apply[submit_job_application]
-    tool --> verify[verify_job_status]
+    request{understand_user_request_node} -->|NEEDS_TOOLS| tool
+    jobright[fetch_jobright_jobs] -->|next_step: tool_node| tool
+    validate{is_job_valid} -->|NEEDS_TOOLS| tool
+    resolve{resolve_application_url} -->|NEEDS_TOOLS| tool
+    login{perform_login} -->|NEEDS_TOOLS| tool
+    apply{submit_job_application} -->|NEEDS_TOOLS| tool
+    verify{verify_job_status} -->|NEEDS_TOOLS| tool
 
-    request -->|NEEDS_TOOLS| tool
-    jobright -->|next_step is tool_node| tool
-    validate -->|NEEDS_TOOLS| tool
-    resolve -->|NEEDS_TOOLS| tool
-    login -->|NEEDS_TOOLS| tool
-    apply -->|NEEDS_TOOLS| tool
-    verify -->|NEEDS_TOOLS| tool
+    tool -->|tool_call_origin| request
+    tool -->|tool_call_origin| jobright
+    tool -->|tool_call_origin| validate
+    tool -->|tool_call_origin| resolve
+    tool -->|tool_call_origin| login
+    tool -->|tool_call_origin| apply
+    tool -->|tool_call_origin| verify
 
     resolve -->|REQUIRES_LOGIN| login
     resolve -->|FAILED| review[human_in_the_loop]
-    login -->|SUCCESS: resume URL resolution| resolve
-    login -->|SUCCESS: resume application| apply
+
+    login -->|SUCCESS: return to resolver| resolve
+    login -->|SUCCESS: return to submission| apply
     login -->|FAILED| review
+
     apply -->|REQUIRES_LOGIN| login
-    apply -->|NOT_APPLIED and review required| review
-    review -->|resume resolution| resolve
-    review -->|resume login| login
-    review -->|resume application| apply
+    apply -->|NOT_APPLIED: review required| review
+    apply -->|NOT_APPLIED: no review| status[update_job_status]
+
+    review -->|next_step: resolve URL| resolve
+    review -->|next_step: log in| login
+    review -->|next_step: submit application| apply

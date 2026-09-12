@@ -53,7 +53,8 @@ class UserProfile:
             return "Yes" if value else "No"
 
         application_answers = "\n".join(
-            f"- {item['question']}: {item['answer']}"
+            f"- {item['question']}: {item['answer']} "
+            f"[scope: {item.get('scope', 'global')}; context: {item.get('context', '')}]"
             for item in profile.application_answers.values()
             if item.get("question") and item.get("answer")
         ) or "- None recorded yet."

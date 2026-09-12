@@ -11,20 +11,20 @@ class JobQueryFilter(BaseModel):
 class ChatWithUserSubModel(BaseModel):
     action: Literal["CHAT"]
 
-class CustomURLFromUserSubModel(BaseModel):
-    action: Literal["NEW_JOB_URL"]
-    job_url: str = Field(
-        description=(
-            "The exact job-posting URL supplied by the user or selected"),
-    )
+# class CustomURLFromUserSubModel(BaseModel):
+    # action: Literal["NEW_JOB_URL"]
+    # job_url: str = Field(
+    #     description=(
+    #         "The exact job-posting URL supplied by the user or selected"),
+    # )
 
-class DispatchJobsSubModel(BaseModel):
+class ApplyForJobsSubModel(BaseModel):
     action: Literal["APPLY_FOR_JOBS"]
-    job_query_filter : JobQueryFilter = Field(description="Job search filter to be used for searching jobs")
+    job_urls: list[str] = Field(description = "List of job URLs to apply for")
 
 
 class FetchJobrightJobsSubModel(BaseModel):
-    action: Literal["JOBRIGHT_JOBS"]
+    action: Literal["FETCH_JOBRIGHT_JOBS"]
     job_count: int = Field(
         ge=1,
         le=5,

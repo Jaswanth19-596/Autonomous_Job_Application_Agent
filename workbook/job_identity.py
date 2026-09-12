@@ -29,8 +29,8 @@ def canonical_job_url(url: object) -> str:
     if not value:
         return ""
     parsed = urlsplit(value)
-    if not parsed.scheme or not parsed.netloc:
-        return value.rstrip("/")
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        return ""
 
     hostname = parsed.hostname.lower() if parsed.hostname else ""
     path = parsed.path.rstrip("/") or "/"

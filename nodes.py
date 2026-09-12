@@ -26,6 +26,11 @@ from models.schemas import (
 )
 from prompts import load_prompt
 from utilities.opencode import OPENCODE_USER_AGENT, opencode_session_headers
+from utilities.application_answers import create_application_answer_tool
+from utilities.form_fill import verified_fill
+from utilities.profile_memory import (
+    load_profile, save_answer, recalled_answer, question_context, applicable_profile,
+)
 from utilities import (
     await_with_progress,
     compile_resume_pdf,
@@ -41,7 +46,8 @@ from utilities import (
     trace_node,
     update_job_status as update_job_status_tool,
 )
-from workbook.job_identity import canonical_job_id
+from workbook.job_identity import canonical_job_id, canonical_job_url
+from workbook.invalid_jobs import move_failed_job
 from workbook.jobs_workbook import upsert_job_row, upsert_job_rows
 from jobs.fetcher import APPLICATION_METRIC_COLUMNS, JOB_COLUMNS
 from jobs.jobright import (
@@ -75,6 +81,17 @@ model = ChatOpenAI(
 )
 
 
+# Questionnaire drafting uses Luna independently of the main workflow model.
+application_answer_model = ChatOpenAI(
+    model="gpt-5.6-luna",
+    api_key=os.getenv("OPENCODE_API_KEY"),
+    base_url="https://opencode.ai/zen/go/v1",
+    default_headers={"User-Agent": OPENCODE_USER_AGENT},
+    use_responses_api=True,
+    timeout=120.0,
+    max_retries=2,
+)
+
 mcp_manager = MCPManager()
 
 
@@ -98,7 +115,11 @@ def visible_response_text(content: object) -> str:
     return "\n".join(text_blocks)
 
 
-async def get_custom_model_with_tools(tool_list, config: RunnableConfig | None = None):
+async def get_custom_model_with_tools(
+    tool_list,
+    config: RunnableConfig | None = None,
+    application_answer_source: dict | None = None,
+):
     """Load requested MCP tools before binding them to the model."""
     headers = opencode_session_headers(config)
     mcp_servers = [tool_name for tool_name in tool_list if tool_name in {"chrome", "gmail"}]
@@ -110,6 +131,12 @@ async def get_custom_model_with_tools(tool_list, config: RunnableConfig | None =
     tools = [*mcp_tools]
     if "custom" in tool_list:
         tools.extend((get_applied_jobs, get_pending_or_invalid_jobs))
+    if "application_answers" in tool_list:
+        if application_answer_source is None:
+            raise ValueError("Application-answer tools require workflow source context")
+        tools.append(create_application_answer_tool(
+            application_answer_model, application_answer_source
+        ))
     return model.bind_tools(tools=tools, extra_headers=headers)
 
 def _with_go_structured_output(schema, config: RunnableConfig | None = None):
@@ -154,6 +181,21 @@ tools_by_name = {
 }
 
 
+def application_answer_source(state, profile=None):
+    """Return the complete, scoped evidence set for questionnaire drafting."""
+    scoped_profile = applicable_profile(profile or load_profile(), state)
+    customized_resume = state.get("customized_resume", "")
+    if not customized_resume:
+        raise ValueError("Customized resume text is unavailable for questionnaire drafting")
+    return {
+        "job_details": state.get("job_details") or {},
+        "user_profile": scoped_profile,
+        "customized_resume": customized_resume,
+        "application_answers": scoped_profile.get("application_answers", {}),
+        "projects": state.get("projects") or "",
+    }
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +238,12 @@ async def tool_node(state):
         tool_args = tool_call["args"]
         tool_call_id = tool_call["id"]
 
-        tool = tools_by_name.get(tool_name)
+        if tool_name == "generate_application_answer":
+            tool = create_application_answer_tool(
+                application_answer_model, application_answer_source(state)
+            )
+        else:
+            tool = tools_by_name.get(tool_name)
         if tool is None:
             error = f"Unknown tool requested: {tool_name}"
             logger.warning(error)
@@ -208,7 +255,12 @@ async def tool_node(state):
             tool_result = await await_with_progress(
                 node_name,
                 f"Running tool: {tool_name}",
-                asyncio.wait_for(tool.ainvoke(tool_args), timeout=60),
+                asyncio.wait_for(
+                    verified_fill(tool_name, tool_args, tools_by_name)
+                    if tool_name in {"fill", "fill_form"}
+                    else tool.ainvoke(tool_args),
+                    timeout=60,
+                ),
                 show_progress=False,
             )
         except asyncio.TimeoutError:
@@ -296,7 +348,11 @@ def initialize_user_data(state):
         "reference_resume_path": str(reference_resume_path),
         "applied_jobs_path": applied_jobs_path,
         "pending_jobs_path": pending_jobs_path,
-        "messages": [system_message]
+        "messages": [system_message],
+        "actual_job_url": "",
+        "authenticated_session": False,
+        "resolve_application_url_messages": [],
+        "perform_login_messages": [],
     }
 
 
@@ -387,16 +443,7 @@ async def understand_user_request_node(state):
             "messages": [response],
             "user_node_decision": decision.action,
         }
-
-
-    if decision.action == "NEW_JOB_URL":
-        return {
-            "messages": [response],
-            "user_node_decision": decision.action,
-            "job_url": decision.job_url,
-        }
-
-    if decision.action == "JOBRIGHT_JOBS":
+    if decision.action == "FETCH_JOBRIGHT_JOBS":
         return {
             "messages": [response],
             "user_node_decision": decision.action,
@@ -411,50 +458,15 @@ async def understand_user_request_node(state):
         return {
             "messages": [response],
             "user_node_decision": decision.action,
-            "job_query_filter": decision.job_query_filter.model_dump(),
+            "application_queue": decision.job_urls,
+            "num_jobs_to_process": len(decision.job_urls)
         }
-
 
     logger.debug("Next action: %s", decision.action)
 
 
 @trace_node
-async def prepare_job_application_queue(state):
-
-    job_query_filter = state["job_query_filter"]
-    
-    tool_args = (
-        job_query_filter.model_dump()
-        if hasattr(job_query_filter, "model_dump")
-        else dict(job_query_filter)
-    )
-    tool_args["filters"] = ["Not Applied"]
-    log_workflow_event("loading application queue", **tool_args)
-
-    result = await asyncio.to_thread(get_applied_jobs.invoke, tool_args)
-
-    if "error" in result:
-        logger.error(f"Error fetching jobs: {result['error']}")
-        log_workflow_event("application queue unavailable", error=result["error"])
-        return {
-            "application_queue": [],
-            "num_jobs_to_process": 0
-        }
-
-    else:
-        log_workflow_event(
-            "application queue ready",
-            matched_jobs=result.get("total_matching", len(result["jobs"])),
-            queued_jobs=len(result["jobs"]),
-        )
-        return {
-            "application_queue": result["jobs"],
-            "num_jobs_to_process": len(result["jobs"])
-        }
-
-
-@trace_node
-async def dispath_job(state):
+async def dispatch_job(state):
     application_queue = state.get("application_queue", [])
     if not application_queue:
         log_workflow_event("application queue exhausted", destination="collect_user_request")
@@ -464,28 +476,18 @@ async def dispath_job(state):
             "num_jobs_to_process": 0,
         }
 
-    current_job = application_queue[0]
+    job_url = application_queue[0]
     remaining_application_queue = application_queue[1:]
-    job_url = current_job.get("applyUrl") or current_job.get("url", "")
+    
     log_workflow_event(
         "selected queued job for validation",
-        job_id=current_job.get("id", ""),
-        title=current_job.get("title", ""),
-        company=current_job.get("companyName", ""),
+        job_url = job_url,
         remaining_jobs=len(remaining_application_queue),
     )
 
     return {
-        "current_job": current_job,
-        "job_details": current_job,
         "job_url": job_url,
-        # Authentication and browser evidence are scoped to one queued job.
-        # Carrying them into the next job can otherwise suppress a real gate or
-        # revive a previous site's login transcript.
-        "actual_job_url": "",
-        "authenticated_session": False,
-        "resolve_application_url_messages": [],
-        "perform_login_messages": [],
+        "application_recovery_attempts": 0,
         "application_queue": remaining_application_queue,
         "num_jobs_to_process": len(remaining_application_queue),
         "has_next_job": len(remaining_application_queue) > 0,
@@ -605,7 +607,7 @@ async def fetch_jobright_jobs(state):
         "jobright_collection_job_number": 1,
         "jobright_excluded_jobs": excluded_jobs,
         "jobright_jobs": jobright_jobs,
-        "messages": [{"role": "assistant", "content": message}],
+        "messages": [{"role": "assistant", "content": [message, str(jobright_jobs)]}],
         "next_step": "collect_user_request",
     }
 
@@ -691,11 +693,15 @@ def save_job_to_workbook(state):
     }
 
     # creating the identity record
-    identity_record = {
-        **row,
-        "link": job_details.get("link") or state.get("job_url", ""),
-        "applyUrl": row.get("applyUrl") or state.get("actual_job_url", ""),
-    }
+    # Model output may contain the literal string "null". Persist the real
+    # workflow URLs so placeholders cannot identify unrelated jobs as duplicates.
+    for field, fallback in (("link", "job_url"), ("applyUrl", "actual_job_url")):
+        row[field] = next(
+            (str(value).strip() for value in (row.get(field), state.get(fallback))
+             if canonical_job_url(value)),
+            "",
+        )
+    identity_record = {key: value for key, value in row.items() if key != "id"}
 
     row["id"] = canonical_job_id(identity_record)
 
@@ -732,9 +738,8 @@ def build_validation_messages(state):
 
     job_url = state.get("job_url")
     log_workflow_event(
-        "building validation prompt",
-        job_id=(state.get("current_job") or {}).get("id", ""),
-        job_host=urlparse(job_url).netloc if job_url else "",
+        "build validation messages",
+        job_url=(state.get("job_url"))
     )
 
     return {
@@ -838,7 +843,7 @@ async def customize_resume(state):
     ])
 
     # Save the generated source and compile the matching PDF beside it.
-    company = safe_resume_filename_part(job_details.get("company", ""))
+    company = safe_resume_filename_part(job_details.get("companyName", ""))
     title = safe_resume_filename_part(job_details.get("title", ""))
     tex_path = Path("resumes") / f"{company}_{title}.tex"
     tex_path.parent.mkdir(parents=True, exist_ok=True)
@@ -852,6 +857,7 @@ async def customize_resume(state):
 
     return {
         "customized_resume_path": str(pdf_path),
+        "customized_resume": latex_source,
         "submit_job_application_messages": [
             {'role': 'system', 'content': load_prompt("apply_for_job/system.txt")},
             {'role':'user', 'content': load_prompt(
@@ -859,6 +865,9 @@ async def customize_resume(state):
                 user_profile=json.dumps(state.get("user_profile")),
                 resume_data=state.get("resume_data"),
                 resume_file_path=str(pdf_path),
+                job_details=json.dumps(job_details, default=str),
+                customized_resume=latex_source,
+                projects=json.dumps(projects, default=str),
             )},
         ]
     }
@@ -1076,9 +1085,18 @@ async def submit_job_application(state):
     node_name = "submit_job_application"
     log_node_stage(node_name, "Started — completing the job application")
     
-    messages = state['submit_job_application_messages']
+    profile = load_profile()
+    messages = [*state['submit_job_application_messages'], {
+        "role": "user",
+        "content": "Latest saved profile and confirmed answers (use these before asking; "
+                   "newer explicit answers supersede older facts for the same scope):\n" +
+                   json.dumps(applicable_profile(profile, state), ensure_ascii=False),
+    }]
 
-    model_with_tools = await get_custom_model_with_tools(["chrome", "gmail"])
+    model_with_tools = await get_custom_model_with_tools(
+        ["chrome", "gmail", "application_answers"],
+        application_answer_source=application_answer_source(state, profile),
+    )
     structured_job_application_model = get_custom_structured_model("job_application_model")
 
     response = await await_with_progress(
@@ -1088,10 +1106,6 @@ async def submit_job_application(state):
     )
 
     if response.tool_calls:
-        # ``submit_job_application_messages`` uses LangGraph's append reducer.
-        # Emit only the new assistant message; returning the full transcript
-        # would append prior function calls a second time and make the provider
-        # reject their duplicate call IDs.
         return {
             "job_application_phase": "NEEDS_TOOLS",
             "tool_call_origin": "submit_job_application",
@@ -1110,11 +1124,28 @@ async def submit_job_application(state):
             ),
         },
     ]
-    structured_response = await await_with_progress(
-        node_name,
-        "Agent is recording the application result",
-        structured_job_application_model.ainvoke(structured_messages),
-    )
+
+    structured_response = ""
+
+    for i in range(3):
+        structured_response = await await_with_progress(
+            node_name,
+            "Agent is recording the application result",
+            structured_job_application_model.ainvoke(structured_messages),
+        )
+        
+        if not structured_response:
+            structured_messages.append({
+            "role": "user",
+            "content": (
+                "Please call the tool to produce structured output."
+            ),
+         })
+
+
+        if structured_response:
+            break
+
     logger.debug("Final response: %s", structured_response)
 
     
@@ -1144,6 +1175,31 @@ async def submit_job_application(state):
             "login_return_node": "submit_job_application",
         }
 
+    reason = application_result.human_intervention_reason
+    question = (application_result.human_intervention_prompt or "").strip()
+    scope = application_result.question_scope
+    known_answer = recalled_answer(profile, question, scope, question_context(state, scope))
+    permitted_handoff = application_result.requires_human and (
+        reason in {"CAPTCHA", "SECURITY"} or (reason == "QUESTION" and bool(question) and not known_answer)
+    )
+    if not permitted_handoff and state.get("application_recovery_attempts", 0) < 2:
+        instruction = (
+            f"Already answered: {question}\nUser's saved answer: {known_answer}\n"
+            if known_answer else ""
+        )
+        return {
+            "job_application_phase": "CONTINUE",
+            "application_recovery_attempts": state.get("application_recovery_attempts", 0) + 1,
+            "requires_human": False,
+            "submit_job_application_messages": [response, {"role": "user", "content": instruction +
+                "Continue completing and submitting this application yourself. Inspect the current page "
+                "and use an alternative supported interaction for failed controls. Do not repeat a failed "
+                "fill or ask me to fill, review, or submit the application. Ask only one missing factual "
+                "question (QUESTION), or request the specific CAPTCHA/security action. If supported "
+                "recovery methods are exhausted, report the technical failure with requires_human=false. "
+                "Verify whether submission already occurred before taking any submit action."}],
+        }
+
     # The unsuccessful branch owns the human-intervention fields. It does not
     # provide confirmation metadata, so reset those fields rather than reading
     # attributes that are absent from ApplicationNotAppliedSubModel.
@@ -1151,12 +1207,16 @@ async def submit_job_application(state):
         "job_application_phase": "NOT_APPLIED",
         "is_applied": False,
         "url_applied_on": "",
-        "final_status_message": "Application was not submitted.",
-        "requires_human": application_result.requires_human,
-        "human_intervention_reason": application_result.human_intervention_reason,
-        "human_intervention_prompt": application_result.human_intervention_prompt or "",
+        "final_status_message": "Application was not submitted. " + (
+            question if permitted_handoff else
+            "Automatic recovery exhausted. " + visible_response_text(response.content)
+        ),
+        "requires_human": permitted_handoff,
+        "human_intervention_reason": reason if permitted_handoff else None,
+        "human_intervention_prompt": question if permitted_handoff else "",
+        "question_scope": scope,
         "human_intervention_origin": (
-            "submit_job_application" if application_result.requires_human else ""
+            "submit_job_application" if permitted_handoff else ""
         ),
         "submit_job_application_messages": [response],
     }
@@ -1228,6 +1288,14 @@ async def verify_job_status(state):
             structured_model.ainvoke(structured_messages),
         )
 
+        if not structured_response:
+            structured_messages.append({
+                "role": "user",
+                "content": (
+                    "Please call the tool to produce structured output."
+                ),
+            })
+
         if structured_response:
             break
 
@@ -1251,22 +1319,23 @@ async def update_job_status(state):
     """Persist the result of an application by directly invoking the status tool."""
     node_name = "update_job_status"
     log_node_stage(node_name, "Started — updating the job status")
-
+    pending_path = Path(state.get("pending_jobs_path") or Path(__file__).resolve().parent / "data/pending_jobs.xlsx")
+    invalid_path = pending_path.with_name("invalid_jobs.xlsx")
 
     # If the job itself is invalid
     if state['validation_phase'] == "NOT_ELIGIBLE":
-        reason = state['final_status_message']
-
-        # insert into invalid_jobs.xlsx file 
-        df = pd.read_excel("invalid_jobs.xlsx")
-        df.append({"job_id": job_id, "reason": reason}, ignore_index=True)
-        df.to_excel("invalid_jobs.xlsx", index=False)
-        return {}
+        # Rejected jobs skip extraction and may retain a previous job's details.
+        # Identify this listing directly from the URL selected by dispatch_job.
+        move_failed_job(
+            pending_path, invalid_path, state.get("job_url"),
+            state.get("final_status_message", ""),
+        )
+        log_node_stage(node_name, "Completed — rejected job moved from pending to invalid")
+        return {"completed_jobs": [state["job_url"]], "application_status": "Not Applied"}
 
     # If the job is valid, but applying is unsuccessful
-    job_details = state.get("job_details", {})
-    job_id = job_details["id"]
-
+    job_details = state.get("job_details") or {}
+    job_id = job_details.get("id")
     if not job_id:
         raise ValueError("Cannot update job status because the job has no stable ID.")
 
@@ -1297,8 +1366,19 @@ async def update_job_status(state):
     if "error" in tool_result:
         raise RuntimeError(tool_result["error"])
 
+    if application_status != "Applied":
+        move_failed_job(pending_path, invalid_path, state.get("job_url"), final_status_message)
+
     log_node_stage(node_name, "Completed — job status updated")
-    return {"application_status": application_status}
+    return {
+        "completed_jobs": [state['job_url']],
+        "application_status": application_status,
+        "submit_job_application_messages": [],
+        "is_job_valid_messages": [],
+        "resolve_application_url_messages": [],
+        "perform_login_messages": [],
+        "verify_job_status_messages": []
+    }
 
 
 @trace_node
@@ -1317,10 +1397,50 @@ async def human_in_the_loop(state):
         "reason": f"{state['human_intervention_reason']}"
     })
     
-    return {
-        "next_step": state['human_intervention_origin'],
-        "requires_human": False,
-        "human_intervention_reason": "",
-        "human_intervention_prompt": "",
-        "human_intervention_origin": "",
-    }
+    if state["human_intervention_origin"] == "submit_job_application":
+        profile = load_profile()
+        if state.get("human_intervention_reason") == "QUESTION":
+            scope = state.get("question_scope", "job")
+            profile = save_answer(
+                state["human_intervention_prompt"], user_input, scope,
+                question_context(state, scope),
+            )
+        return {
+            "user_profile": profile,
+            "application_recovery_attempts": 0,
+            "next_step": state['human_intervention_origin'],
+            "submit_job_application_messages": [{"role": "user", "content": user_input}],
+            "requires_human": False,
+            "human_intervention_reason": "",
+            "human_intervention_prompt": "",
+            "human_intervention_origin": "",
+        }
+
+    elif state["human_intervention_origin"] == "perform_login":
+        return {
+            "next_step": state['human_intervention_origin'],
+            "perform_login_messages": [{"role": "user", "content": user_input}],
+            "requires_human": False,
+            "human_intervention_reason": "",
+            "human_intervention_prompt": "",
+            "human_intervention_origin": "",
+        }
+    
+    elif state["human_intervention_origin"] == "resolve_application_url":
+        return {
+            "next_step": state['human_intervention_origin'],
+            "resolve_application_url_messages": [{"role": "user", "content": user_input}],
+            "requires_human": False,
+            "human_intervention_reason": "",
+            "human_intervention_prompt": "",
+            "human_intervention_origin": "",
+        }
+
+    else:
+        return {
+            "next_step": state['human_intervention_origin'],
+            "requires_human": False,
+            "human_intervention_reason": "",
+            "human_intervention_prompt": "",
+            "human_intervention_origin": "",
+        }

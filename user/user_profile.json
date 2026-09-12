@@ -1,243 +1,259 @@
 {
-    "first_name": "Jaswanth",
-    "last_name": "Mada",
-    "email": "madhajaswanth91@gmail.com",
-    "phone_number": "2194665564",
-    "phone_extension": "+1",
-    "linkedin_url": "https://www.linkedin.com/in/jaswanthmadha",
-    "github_url": "https://github.com/Jaswanth19-596",
-    "portfolio_url": "https://madajaswanth.netlify.app",
-    "address": "6719 Schneider Avenue",
-    "city": "Hammond",
-    "state": "Indiana",
-    "zip_code": "46323",
-    "school": "Purdue University Northwest or Purdue University Calumet",
-    "degree": "Master of Science",
-    "field_of_study": "Computer Science or Computer and Information Science",
-    "education_start_date": "2023-08",
-    "education_end_date": "2025-05",
-    "gpa": "3.8",
-    "authorized_to_work_us": true,
-    "visa_status": "F-1 OPT",
-    "us_citizen": false,
-    "security_clearance": false,
-    "desired_salary_min": 80000,
-    "desired_salary_max": 100000,
-    "available_start_date": "Immediately",
-    "open_to_onsite_full_time": true,
-    "open_to_relocation": true,
-    "preferred_locations": "Flexible within the United States",
-    "restricted_by_current_or_former_employer": false,
-    "application_answers": {
-        "if you receive a job offer, are you willing to submit to a background check?": {
-            "question": "If you receive a job offer, are you willing to submit to a background check?",
-            "answer": "yes",
-            "updated_at": "2026-08-14T17:23:10.654747+00:00"
-        },
-        "if you receive a job offer, are you willing to submit to a drug screen if necessary for the position you are applying?": {
-            "question": "If you receive a job offer, are you willing to submit to a drug screen if necessary for the position you are applying?",
-            "answer": "yes",
-            "updated_at": "2026-08-14T17:23:17.563800+00:00"
-        },
-        "have you ever been employed or worked at alight solutions or any of its affiliates before?": {
-            "question": "Have you ever been employed or worked at Alight Solutions or any of its affiliates before?",
-            "answer": "No",
-            "updated_at": "2026-08-14T17:23:24.580418+00:00"
-        },
-        "do you have any relatives currently employed by alight solutions?": {
-            "question": "Do you have any relatives currently employed by Alight Solutions?",
-            "answer": "No",
-            "updated_at": "2026-08-14T17:23:29.685226+00:00"
-        },
-        "the application asks: please select your gender. which option should i choose?": {
-            "question": "The application asks: Please select your gender. Which option should I choose?",
-            "answer": "Male",
-            "updated_at": "2026-08-14T17:24:01.686465+00:00"
-        },
-        "the application asks: please select your race. which option should i choose?": {
-            "question": "The application asks: Please select your race. Which option should I choose?",
-            "answer": "Asian",
-            "updated_at": "2026-08-14T17:24:11.430404+00:00"
-        },
-        "the application asks: please confirm your veteran status. which option should i choose?": {
-            "question": "The application asks: Please confirm your veteran status. Which option should I choose?",
-            "answer": "I am not a veteran",
-            "updated_at": "2026-08-14T17:24:21.821071+00:00"
-        },
-        "the application asks: please check one of the boxes below regarding disability status. which option should i choose?": {
-            "question": "The application asks: Please check one of the boxes below regarding disability status. Which option should I choose?",
-            "answer": "No, I do not have a disability and have not had one in the past",
-            "updated_at": "2026-08-14T17:25:02.389135+00:00"
-        },
-        "workday asks “how did you hear about us?” the available options are: advertisement, partnership, socially, website, workday. which option should i choose?": {
-            "question": "Workday asks “How Did You Hear About Us?” The available options are: Advertisement, Partnership, Socially, Website, Workday. Which option should I choose?",
-            "answer": "Just select any random thing for \"How did you hear about us\"",
-            "updated_at": "2026-08-15T07:42:06.800025+00:00"
-        },
-        "do you meet the preferred qualifications for this role as specified in the job description?": {
-            "question": "Do you meet the Preferred Qualifications for this role as specified in the job description?",
-            "answer": "yes",
-            "updated_at": "2026-08-15T08:29:12.150108+00:00"
-        },
-        "workday requires at least one language. which language(s) should i list? existing autofill shows english, hindi, and telugu, but these are not in the provided profile. please specify the language(s) to keep (and whether fluent).": {
-            "question": "Workday requires at least one language. Which language(s) should I list? Existing autofill shows English, Hindi, and Telugu, but these are not in the provided profile. Please specify the language(s) to keep (and whether fluent).",
-            "answer": "Don't worry about them, leave them alone",
-            "updated_at": "2026-08-15T09:49:04.361024+00:00"
-        },
-        "armanino application asks: do you consent to receive text messages (updates/reminders) at the provided number?": {
-            "question": "Armanino application asks: Do you consent to receive text messages (updates/reminders) at the provided number?",
-            "answer": "Yes",
-            "updated_at": "2026-08-15T09:52:12.753261+00:00"
-        },
-        "at your current position, to the best of your knowledge, have you or your company utilized armanino for services? if yes, select all applicable services; if no, select the available 'no' or equivalent option.": {
-            "question": "At your current position, to the best of your knowledge, have you or your company utilized Armanino for services? If yes, select all applicable services; if no, select the available 'No' or equivalent option.",
-            "answer": "No",
-            "updated_at": "2026-08-15T09:52:43.106300+00:00"
-        },
-        "do you currently hold an anthropic claude certification?": {
-            "question": "Do you currently hold an Anthropic Claude Certification?",
-            "answer": "Yes",
-            "updated_at": "2026-08-15T14:12:16.924176+00:00"
-        },
-        "will you now, or in the future, require visa sponsorship to work in the country this position is located?": {
-            "question": "Will you now, or in the future, require visa sponsorship to work in the country this position is located?",
-            "answer": "No",
-            "updated_at": "2026-08-15T14:44:43.695927+00:00"
-        },
-        "if applicable to the role applied for, i agree to voluntarily participate in the talent assessment process and understand that plante moran uses the results in combination with an individual's resume, work history, and interview to evaluate a candidate's suitability for employment. do you agree?": {
-            "question": "If applicable to the role applied for, I agree to voluntarily participate in the Talent Assessment process and understand that Plante Moran uses the results in combination with an individual's resume, work history, and interview to evaluate a candidate's suitability for employment. Do you agree?",
-            "answer": "y",
-            "updated_at": "2026-08-16T00:56:34.787376+00:00"
-        },
-        "how have you secured an agentic ai application for an enterprise client? please provide the truthful auth model, rbac handling within agent workflows, secrets management, and audit logging details to enter.": {
-            "question": "How have you secured an agentic AI application for an enterprise client? Please provide the truthful auth model, RBAC handling within agent workflows, secrets management, and audit logging details to enter.",
-            "answer": "You produce an effective answer for this question.",
-            "updated_at": "2026-08-16T01:29:11.527093+00:00"
-        },
-        "have you worked in a client-facing consulting or professional services environment? choose one: yes, as the primary technical lead on client engagements; yes, in a supporting role; no, but i have experience collaborating with external stakeholders; no.": {
-            "question": "Have you worked in a client-facing consulting or professional services environment? Choose one: Yes, as the primary technical lead on client engagements; Yes, in a supporting role; No, but I have experience collaborating with external stakeholders; No.",
-            "answer": "No, but I have experience collaborating with external stakeholders",
-            "updated_at": "2026-08-16T01:29:37.965839+00:00"
-        },
-        "which cloud platforms have you deployed production ai workloads on? the application requires at least two selections. choose from aws, microsoft azure, oracle oci, or none of the above.": {
-            "question": "Which cloud platforms have you deployed production AI workloads on? The application requires at least two selections. Choose from AWS, Microsoft Azure, Oracle OCI, or None of the above.",
-            "answer": "AWS, Azure",
-            "updated_at": "2026-08-16T01:29:52.790839+00:00"
-        },
-        "what is your preferred pronoun for the parts town application?": {
-            "question": "What is your preferred pronoun for the Parts Town application?",
-            "answer": "He/Him/His",
-            "updated_at": "2026-08-16T03:01:43.003935+00:00"
-        },
-        "have you completed the following level of education: bachelor's degree?": {
-            "question": "Have you completed the following level of education: Bachelor's Degree?",
-            "answer": "Yes",
-            "updated_at": "2026-08-16T12:11:47.933705+00:00"
-        },
-        "have you previously been employed by proofpoint?": {
-            "question": "Have you previously been employed by Proofpoint?",
-            "answer": "No",
-            "updated_at": "2026-08-16T12:18:56.879769+00:00"
-        },
-        "itron requires checking this consent box to create an account: “i agree to allow itron's recruiting department to contact me periodically about potentially relevant career opportunities (you can unsubscribe at any time).” do you agree?": {
-            "question": "Itron requires checking this consent box to create an account: “I agree to allow Itron's recruiting department to contact me periodically about potentially relevant career opportunities (you can unsubscribe at any time).” Do you agree?",
-            "answer": "Yes, I agree",
-            "updated_at": "2026-08-16T12:30:13.847217+00:00"
-        },
-        "deloitte asks: do you have or plan to pursue a cpa license? (required). which option should i select?": {
-            "question": "Deloitte asks: Do you have or plan to pursue a CPA license? (Required). Which option should I select?",
-            "answer": "I do not have a plan to pursue a CPA license",
-            "updated_at": "2026-08-16T12:45:32.963070+00:00"
-        },
-        "linkedin easy apply asks required years of work experience for: (1) python (programming language), (2) rest apis, (3) git, and (4) information technology. what exact number of years should i enter for each?": {
-            "question": "LinkedIn Easy Apply asks required years of work experience for: (1) Python (Programming Language), (2) REST APIs, (3) Git, and (4) Information Technology. What exact number of years should I enter for each?",
-            "answer": "Look at my profile and answer these questions",
-            "updated_at": "2026-08-16T12:55:09.532196+00:00"
-        },
-        "linkedin easy apply asks: how many years of work experience do you have with enterprise software?": {
-            "question": "LinkedIn Easy Apply asks: How many years of work experience do you have with Enterprise Software?",
-            "answer": "2",
-            "updated_at": "2026-08-16T13:25:17.587706+00:00"
-        },
-        "have you worked at exelixis before?": {
-            "question": "Have you worked at Exelixis before?",
-            "answer": "No",
-            "updated_at": "2026-08-16T13:39:56.799816+00:00"
-        },
-        "do you consent to receive text message updates from market once holdings.com, llc regarding your job application?": {
-            "question": "Do you consent to receive text message updates from Market Once Holdings.com, LLC regarding your job application?",
-            "answer": "Yes - I consent to receiving text messages",
-            "updated_at": "2026-08-16T19:01:30.254049+00:00"
-        },
-        "swbc workday asks: \"what's their name or email address?\" after selecting linkedin as how you heard about us. what exact name or email should i enter?": {
-            "question": "SWBC Workday asks: \"What's their name or email address?\" after selecting LinkedIn as how you heard about us. What exact name or email should I enter?",
-            "answer": "I have filled it and went to next page, continue",
-            "updated_at": "2026-08-16T20:47:12.831502+00:00"
-        },
-        "swbc application asks several profile facts not provided. please give exact answers for: (1) current base salary/hourly rate and any bonus/commission/additional compensation in prior 12 months; (2) desired position type (hourly or salary); (3) employment desired (full-time/part-time/etc.); (4) exact available start date (mm/dd/yyyy); (5) days/times available, including am/pm; (6) whether you have relatives working for swbc; (7) whether you have ever been convicted of a felony; (8) misdemeanor conviction in last 7 years; (9) tobacco-user status.": {
-            "question": "SWBC application asks several profile facts not provided. Please give exact answers for: (1) current base salary/hourly rate and any bonus/commission/additional compensation in prior 12 months; (2) desired position type (hourly or salary); (3) employment desired (full-time/part-time/etc.); (4) exact available start date (MM/DD/YYYY); (5) days/times available, including AM/PM; (6) whether you have relatives working for SWBC; (7) whether you have ever been convicted of a felony; (8) misdemeanor conviction in last 7 years; (9) tobacco-user status.",
-            "answer": "1. Hourly rate : 35$ \n2. Hourly.\n3. Full time.\n4. 08/16/2026\n5. Whole week except Saturday and Sunday from 9AM TO 5 PM\n6. No.\n7. No.\n8. No\n9. Never",
-            "updated_at": "2026-08-16T20:51:54.166648+00:00"
-        },
-        "evlo ai application asks: what % of days are you willing to travel? options: 0%, 25%, 50%, 70%, 75%, 100%. which should i select?": {
-            "question": "Evlo AI application asks: What % of days are you willing to travel? Options: 0%, 25%, 50%, 70%, 75%, 100%. Which should I select?",
-            "answer": "100%",
-            "updated_at": "2026-08-16T21:29:16.750822+00:00"
-        },
-        "evlo ai application asks: are you willing to relocate at your own expense? options: yes or no. which should i select?": {
-            "question": "Evlo AI application asks: Are you willing to relocate at your own expense? Options: Yes or No. Which should I select?",
-            "answer": "Yes",
-            "updated_at": "2026-08-16T21:29:27.423269+00:00"
-        },
-        "what is your sexual orientation? (required on millennium application)": {
-            "question": "What is your sexual orientation? (Required on Millennium application)",
-            "answer": "Heterosexual",
-            "updated_at": "2026-08-17T02:36:03.662891+00:00"
-        },
-        "how would you describe your gender identity? (required on millennium application)": {
-            "question": "How would you describe your gender identity? (Required on Millennium application)",
-            "answer": "Cisgender",
-            "updated_at": "2026-08-17T02:37:14.351079+00:00"
-        },
-        "adp voluntary self-identification asks: what is your ethnicity?": {
-            "question": "ADP voluntary self-identification asks: What is your ethnicity?",
-            "answer": "Not Hispanic or Latino",
-            "updated_at": "2026-08-17T03:56:31.415668+00:00"
-        },
-        "opting into digital forms of communication, including sms, will be used to communicate with the chatham recruiting team if you provide your cell phone number. do you consent to opt in?": {
-            "question": "Opting into digital forms of communication, including SMS, will be used to communicate with the Chatham recruiting team if you provide your cell phone number. Do you consent to opt in?",
-            "answer": "Yes",
-            "updated_at": "2026-08-17T04:24:23.234546+00:00"
-        },
-        "do you or have you previously worked for a competitor of diligent?": {
-            "question": "Do you or have you previously worked for a competitor of Diligent?",
-            "answer": "No",
-            "updated_at": "2026-08-17T05:42:10.145618+00:00"
-        },
-        "if you are currently in a period of optional practical training (opt), are you eligible for a 24-month opt extension based upon a degree from a qualifying united states institution in science, technology, engineering or mathematics (stem)?": {
-            "question": "If you are currently in a period of Optional Practical Training (OPT), are you eligible for a 24-month OPT extension based upon a degree from a qualifying United States institution in Science, Technology, Engineering or Mathematics (STEM)?",
-            "answer": "Yes",
-            "updated_at": "2026-08-17T06:06:43.265868+00:00"
-        },
-        "how would you rate your domain knowledge in mobility, logistics, fleet, or robotics? (moove software engineer application)": {
-            "question": "How would you rate your domain knowledge in mobility, logistics, fleet, or robotics? (Moove Software Engineer application)",
-            "answer": "Beginner",
-            "updated_at": "2026-08-18T14:17:43.172180+00:00"
-        },
-        "Any preference on where to work": {
-            "question": "Would you prefer working in-office, remote, or hybrid? (Millennium application)",
-            "answer": "I'm open with everything : In-office, remote or hybrid",
-            "updated_at": "2026-08-19T00:11:05.722671+00:00"
-        },
-        "details of your supervisors": {
-            "question": "Details of your supervisors",
-            "updated_at": "2026-08-19T00:11:05.722671+00:00",
-            "answer": "1. Name : Norman Villaroman, Title : Director , email: norman@accessifiers.org, phone: NA 2. Victor Guo, Title : Professor, email: guo37@pnw.edu, phone: NA, 3. Srikanth M, Title : Manager, email: srikanth.m@bizplus4u.com, phone: NA"
-        },
-        "the adp job application sent a verification code to your email (madhajaswanth91@gmail.com), but i cannot retrieve email access right now. please provide the 6-digit verification code so i can log in and continue the application for associate solutions engineer at openexchange.": {
-            "question": "The ADP job application sent a verification code to your email (madhajaswanth91@gmail.com), but I cannot retrieve email access right now. Please provide the 6-digit verification code so I can log in and continue the application for Associate Solutions Engineer at OpenExchange.",
-            "answer": "I already logged in go ahead and",
-            "updated_at": "2026-08-20T10:40:03.749085+00:00"
-        }
+  "first_name": "Jaswanth",
+  "last_name": "Mada",
+  "email": "madhajaswanth91@gmail.com",
+  "phone_number": "2194665564",
+  "phone_extension": "+1",
+  "linkedin_url": "https://www.linkedin.com/in/jaswanthmadha",
+  "github_url": "https://github.com/Jaswanth19-596",
+  "portfolio_url": "https://madajaswanth.netlify.app",
+  "address": "6719 Schneider Avenue",
+  "city": "Hammond",
+  "state": "Indiana",
+  "zip_code": "46323",
+  "school": "Purdue University Northwest or Purdue University Calumet",
+  "degree": "Master of Science",
+  "field_of_study": "Computer Science or Computer and Information Science",
+  "education_start_date": "2023-08",
+  "education_end_date": "2025-05",
+  "gpa": "3.8",
+  "authorized_to_work_us": true,
+  "visa_status": "F-1 OPT",
+  "us_citizen": false,
+  "security_clearance": false,
+  "desired_salary_min": 80000,
+  "desired_salary_max": 100000,
+  "available_start_date": "Immediately",
+  "open_to_onsite_full_time": true,
+  "open_to_relocation": true,
+  "preferred_locations": "Flexible within the United States",
+  "restricted_by_current_or_former_employer": false,
+  "application_answers": {
+    "if you receive a job offer, are you willing to submit to a background check?": {
+      "question": "If you receive a job offer, are you willing to submit to a background check?",
+      "answer": "yes",
+      "updated_at": "2026-08-14T17:23:10.654747+00:00"
+    },
+    "if you receive a job offer, are you willing to submit to a drug screen if necessary for the position you are applying?": {
+      "question": "If you receive a job offer, are you willing to submit to a drug screen if necessary for the position you are applying?",
+      "answer": "yes",
+      "updated_at": "2026-08-14T17:23:17.563800+00:00"
+    },
+    "have you ever been employed or worked at alight solutions or any of its affiliates before?": {
+      "question": "Have you ever been employed or worked at Alight Solutions or any of its affiliates before?",
+      "answer": "No",
+      "updated_at": "2026-08-14T17:23:24.580418+00:00"
+    },
+    "do you have any relatives currently employed by alight solutions?": {
+      "question": "Do you have any relatives currently employed by Alight Solutions?",
+      "answer": "No",
+      "updated_at": "2026-08-14T17:23:29.685226+00:00"
+    },
+    "the application asks: please select your gender. which option should i choose?": {
+      "question": "The application asks: Please select your gender. Which option should I choose?",
+      "answer": "Male",
+      "updated_at": "2026-08-14T17:24:01.686465+00:00"
+    },
+    "the application asks: please select your race. which option should i choose?": {
+      "question": "The application asks: Please select your race. Which option should I choose?",
+      "answer": "Asian",
+      "updated_at": "2026-08-14T17:24:11.430404+00:00"
+    },
+    "the application asks: please confirm your veteran status. which option should i choose?": {
+      "question": "The application asks: Please confirm your veteran status. Which option should I choose?",
+      "answer": "I am not a veteran",
+      "updated_at": "2026-08-14T17:24:21.821071+00:00"
+    },
+    "the application asks: please check one of the boxes below regarding disability status. which option should i choose?": {
+      "question": "The application asks: Please check one of the boxes below regarding disability status. Which option should I choose?",
+      "answer": "No, I do not have a disability and have not had one in the past",
+      "updated_at": "2026-08-14T17:25:02.389135+00:00"
+    },
+    "workday asks “how did you hear about us?” the available options are: advertisement, partnership, socially, website, workday. which option should i choose?": {
+      "question": "Workday asks “How Did You Hear About Us?” The available options are: Advertisement, Partnership, Socially, Website, Workday. Which option should I choose?",
+      "answer": "Just select any random thing for \"How did you hear about us\"",
+      "updated_at": "2026-08-15T07:42:06.800025+00:00"
+    },
+    "do you meet the preferred qualifications for this role as specified in the job description?": {
+      "question": "Do you meet the Preferred Qualifications for this role as specified in the job description?",
+      "answer": "yes",
+      "updated_at": "2026-08-15T08:29:12.150108+00:00"
+    },
+    "workday requires at least one language. which language(s) should i list? existing autofill shows english, hindi, and telugu, but these are not in the provided profile. please specify the language(s) to keep (and whether fluent).": {
+      "question": "Workday requires at least one language. Which language(s) should I list? Existing autofill shows English, Hindi, and Telugu, but these are not in the provided profile. Please specify the language(s) to keep (and whether fluent).",
+      "answer": "Don't worry about them, leave them alone",
+      "updated_at": "2026-08-15T09:49:04.361024+00:00"
+    },
+    "armanino application asks: do you consent to receive text messages (updates/reminders) at the provided number?": {
+      "question": "Armanino application asks: Do you consent to receive text messages (updates/reminders) at the provided number?",
+      "answer": "Yes",
+      "updated_at": "2026-08-15T09:52:12.753261+00:00"
+    },
+    "at your current position, to the best of your knowledge, have you or your company utilized armanino for services? if yes, select all applicable services; if no, select the available 'no' or equivalent option.": {
+      "question": "At your current position, to the best of your knowledge, have you or your company utilized Armanino for services? If yes, select all applicable services; if no, select the available 'No' or equivalent option.",
+      "answer": "No",
+      "updated_at": "2026-08-15T09:52:43.106300+00:00"
+    },
+    "do you currently hold an anthropic claude certification?": {
+      "question": "Do you currently hold an Anthropic Claude Certification?",
+      "answer": "Yes",
+      "updated_at": "2026-08-15T14:12:16.924176+00:00"
+    },
+    "will you now, or in the future, require visa sponsorship to work in the country this position is located?": {
+      "question": "Will you now, or in the future, require visa sponsorship to work in the country this position is located?",
+      "answer": "No",
+      "updated_at": "2026-08-15T14:44:43.695927+00:00"
+    },
+    "if applicable to the role applied for, i agree to voluntarily participate in the talent assessment process and understand that plante moran uses the results in combination with an individual's resume, work history, and interview to evaluate a candidate's suitability for employment. do you agree?": {
+      "question": "If applicable to the role applied for, I agree to voluntarily participate in the Talent Assessment process and understand that Plante Moran uses the results in combination with an individual's resume, work history, and interview to evaluate a candidate's suitability for employment. Do you agree?",
+      "answer": "y",
+      "updated_at": "2026-08-16T00:56:34.787376+00:00"
+    },
+    "how have you secured an agentic ai application for an enterprise client? please provide the truthful auth model, rbac handling within agent workflows, secrets management, and audit logging details to enter.": {
+      "question": "How have you secured an agentic AI application for an enterprise client? Please provide the truthful auth model, RBAC handling within agent workflows, secrets management, and audit logging details to enter.",
+      "answer": "You produce an effective answer for this question.",
+      "updated_at": "2026-08-16T01:29:11.527093+00:00"
+    },
+    "have you worked in a client-facing consulting or professional services environment? choose one: yes, as the primary technical lead on client engagements; yes, in a supporting role; no, but i have experience collaborating with external stakeholders; no.": {
+      "question": "Have you worked in a client-facing consulting or professional services environment? Choose one: Yes, as the primary technical lead on client engagements; Yes, in a supporting role; No, but I have experience collaborating with external stakeholders; No.",
+      "answer": "No, but I have experience collaborating with external stakeholders",
+      "updated_at": "2026-08-16T01:29:37.965839+00:00"
+    },
+    "which cloud platforms have you deployed production ai workloads on? the application requires at least two selections. choose from aws, microsoft azure, oracle oci, or none of the above.": {
+      "question": "Which cloud platforms have you deployed production AI workloads on? The application requires at least two selections. Choose from AWS, Microsoft Azure, Oracle OCI, or None of the above.",
+      "answer": "AWS, Azure",
+      "updated_at": "2026-08-16T01:29:52.790839+00:00"
+    },
+    "what is your preferred pronoun for the parts town application?": {
+      "question": "What is your preferred pronoun for the Parts Town application?",
+      "answer": "He/Him/His",
+      "updated_at": "2026-08-16T03:01:43.003935+00:00"
+    },
+    "have you completed the following level of education: bachelor's degree?": {
+      "question": "Have you completed the following level of education: Bachelor's Degree?",
+      "answer": "Yes",
+      "updated_at": "2026-08-16T12:11:47.933705+00:00"
+    },
+    "have you previously been employed by proofpoint?": {
+      "question": "Have you previously been employed by Proofpoint?",
+      "answer": "No",
+      "updated_at": "2026-08-16T12:18:56.879769+00:00"
+    },
+    "itron requires checking this consent box to create an account: “i agree to allow itron's recruiting department to contact me periodically about potentially relevant career opportunities (you can unsubscribe at any time).” do you agree?": {
+      "question": "Itron requires checking this consent box to create an account: “I agree to allow Itron's recruiting department to contact me periodically about potentially relevant career opportunities (you can unsubscribe at any time).” Do you agree?",
+      "answer": "Yes, I agree",
+      "updated_at": "2026-08-16T12:30:13.847217+00:00"
+    },
+    "deloitte asks: do you have or plan to pursue a cpa license? (required). which option should i select?": {
+      "question": "Deloitte asks: Do you have or plan to pursue a CPA license? (Required). Which option should I select?",
+      "answer": "I do not have a plan to pursue a CPA license",
+      "updated_at": "2026-08-16T12:45:32.963070+00:00"
+    },
+    "linkedin easy apply asks required years of work experience for: (1) python (programming language), (2) rest apis, (3) git, and (4) information technology. what exact number of years should i enter for each?": {
+      "question": "LinkedIn Easy Apply asks required years of work experience for: (1) Python (Programming Language), (2) REST APIs, (3) Git, and (4) Information Technology. What exact number of years should I enter for each?",
+      "answer": "Look at my profile and answer these questions",
+      "updated_at": "2026-08-16T12:55:09.532196+00:00"
+    },
+    "linkedin easy apply asks: how many years of work experience do you have with enterprise software?": {
+      "question": "LinkedIn Easy Apply asks: How many years of work experience do you have with Enterprise Software?",
+      "answer": "2",
+      "updated_at": "2026-08-16T13:25:17.587706+00:00"
+    },
+    "have you worked at exelixis before?": {
+      "question": "Have you worked at Exelixis before?",
+      "answer": "No",
+      "updated_at": "2026-08-16T13:39:56.799816+00:00"
+    },
+    "do you consent to receive text message updates from market once holdings.com, llc regarding your job application?": {
+      "question": "Do you consent to receive text message updates from Market Once Holdings.com, LLC regarding your job application?",
+      "answer": "Yes - I consent to receiving text messages",
+      "updated_at": "2026-08-16T19:01:30.254049+00:00"
+    },
+    "swbc workday asks: \"what's their name or email address?\" after selecting linkedin as how you heard about us. what exact name or email should i enter?": {
+      "question": "SWBC Workday asks: \"What's their name or email address?\" after selecting LinkedIn as how you heard about us. What exact name or email should I enter?",
+      "answer": "I have filled it and went to next page, continue",
+      "updated_at": "2026-08-16T20:47:12.831502+00:00"
+    },
+    "swbc application asks several profile facts not provided. please give exact answers for: (1) current base salary/hourly rate and any bonus/commission/additional compensation in prior 12 months; (2) desired position type (hourly or salary); (3) employment desired (full-time/part-time/etc.); (4) exact available start date (mm/dd/yyyy); (5) days/times available, including am/pm; (6) whether you have relatives working for swbc; (7) whether you have ever been convicted of a felony; (8) misdemeanor conviction in last 7 years; (9) tobacco-user status.": {
+      "question": "SWBC application asks several profile facts not provided. Please give exact answers for: (1) current base salary/hourly rate and any bonus/commission/additional compensation in prior 12 months; (2) desired position type (hourly or salary); (3) employment desired (full-time/part-time/etc.); (4) exact available start date (MM/DD/YYYY); (5) days/times available, including AM/PM; (6) whether you have relatives working for SWBC; (7) whether you have ever been convicted of a felony; (8) misdemeanor conviction in last 7 years; (9) tobacco-user status.",
+      "answer": "1. Hourly rate : 35$ \n2. Hourly.\n3. Full time.\n4. 08/16/2026\n5. Whole week except Saturday and Sunday from 9AM TO 5 PM\n6. No.\n7. No.\n8. No\n9. Never",
+      "updated_at": "2026-08-16T20:51:54.166648+00:00"
+    },
+    "evlo ai application asks: what % of days are you willing to travel? options: 0%, 25%, 50%, 70%, 75%, 100%. which should i select?": {
+      "question": "Evlo AI application asks: What % of days are you willing to travel? Options: 0%, 25%, 50%, 70%, 75%, 100%. Which should I select?",
+      "answer": "100%",
+      "updated_at": "2026-08-16T21:29:16.750822+00:00"
+    },
+    "evlo ai application asks: are you willing to relocate at your own expense? options: yes or no. which should i select?": {
+      "question": "Evlo AI application asks: Are you willing to relocate at your own expense? Options: Yes or No. Which should I select?",
+      "answer": "Yes",
+      "updated_at": "2026-08-16T21:29:27.423269+00:00"
+    },
+    "what is your sexual orientation? (required on millennium application)": {
+      "question": "What is your sexual orientation? (Required on Millennium application)",
+      "answer": "Heterosexual",
+      "updated_at": "2026-08-17T02:36:03.662891+00:00"
+    },
+    "how would you describe your gender identity? (required on millennium application)": {
+      "question": "How would you describe your gender identity? (Required on Millennium application)",
+      "answer": "Cisgender",
+      "updated_at": "2026-08-17T02:37:14.351079+00:00"
+    },
+    "adp voluntary self-identification asks: what is your ethnicity?": {
+      "question": "ADP voluntary self-identification asks: What is your ethnicity?",
+      "answer": "Not Hispanic or Latino",
+      "updated_at": "2026-08-17T03:56:31.415668+00:00"
+    },
+    "opting into digital forms of communication, including sms, will be used to communicate with the chatham recruiting team if you provide your cell phone number. do you consent to opt in?": {
+      "question": "Opting into digital forms of communication, including SMS, will be used to communicate with the Chatham recruiting team if you provide your cell phone number. Do you consent to opt in?",
+      "answer": "Yes",
+      "updated_at": "2026-08-17T04:24:23.234546+00:00"
+    },
+    "do you or have you previously worked for a competitor of diligent?": {
+      "question": "Do you or have you previously worked for a competitor of Diligent?",
+      "answer": "No",
+      "updated_at": "2026-08-17T05:42:10.145618+00:00"
+    },
+    "if you are currently in a period of optional practical training (opt), are you eligible for a 24-month opt extension based upon a degree from a qualifying united states institution in science, technology, engineering or mathematics (stem)?": {
+      "question": "If you are currently in a period of Optional Practical Training (OPT), are you eligible for a 24-month OPT extension based upon a degree from a qualifying United States institution in Science, Technology, Engineering or Mathematics (STEM)?",
+      "answer": "Yes",
+      "updated_at": "2026-08-17T06:06:43.265868+00:00"
+    },
+    "how would you rate your domain knowledge in mobility, logistics, fleet, or robotics? (moove software engineer application)": {
+      "question": "How would you rate your domain knowledge in mobility, logistics, fleet, or robotics? (Moove Software Engineer application)",
+      "answer": "Beginner",
+      "updated_at": "2026-08-18T14:17:43.172180+00:00"
+    },
+    "Any preference on where to work": {
+      "question": "Would you prefer working in-office, remote, or hybrid? (Millennium application)",
+      "answer": "I'm open with everything : In-office, remote or hybrid",
+      "updated_at": "2026-08-19T00:11:05.722671+00:00"
+    },
+    "details of your supervisors": {
+      "question": "Details of your supervisors",
+      "updated_at": "2026-08-19T00:11:05.722671+00:00",
+      "answer": "1. Name : Norman Villaroman, Title : Director , email: norman@accessifiers.org, phone: NA 2. Victor Guo, Title : Professor, email: guo37@pnw.edu, phone: NA, 3. Srikanth M, Title : Manager, email: srikanth.m@bizplus4u.com, phone: NA"
+    },
+    "the adp job application sent a verification code to your email (madhajaswanth91@gmail.com), but i cannot retrieve email access right now. please provide the 6-digit verification code so i can log in and continue the application for associate solutions engineer at openexchange.": {
+      "question": "The ADP job application sent a verification code to your email (madhajaswanth91@gmail.com), but I cannot retrieve email access right now. Please provide the 6-digit verification code so I can log in and continue the application for Associate Solutions Engineer at OpenExchange.",
+      "answer": "I already logged in go ahead and",
+      "updated_at": "2026-08-20T10:40:03.749085+00:00"
+    },
+    "699cdc42452a3fff07160c1e1cadfe9dcadfd641815c9087269a69578f297e81": {
+      "question": "Should I select Yes to allow Domino Data Lab to consider you for other positions using this application?",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6aa1b3b23272060a8e3f19c2",
+      "source": "user",
+      "updated_at": "2026-09-11T11:45:33.872946+00:00"
+    },
+    "d2e10a4c086a7994b0d7b5b44669daa81b64b928a07fb9d0d6207c9e6dc6ee8c": {
+      "question": "What is your SAT / ACT / GRE score to enter for the required SAT / ACT / GRE Score field?",
+      "answer": "308",
+      "scope": "global",
+      "context": "",
+      "source": "user",
+      "updated_at": "2026-09-11T12:22:38.658347+00:00"
     }
+  }
 }

@@ -22,9 +22,8 @@ def route_user_request(state: dict[str, Any]) -> str:
     destinations = {
         "NEEDS_TOOLS": "tool_node",
         "CHAT": "collect_user_request",
-        "NEW_JOB_URL": "build_validation_messages",
-        "JOBRIGHT_JOBS": "fetch_jobright_jobs",
-        "APPLY_FOR_JOBS": "prepare_job_application_queue",
+        "FETCH_JOBRIGHT_JOBS": "fetch_jobright_jobs",
+        "APPLY_FOR_JOBS": "dispatch_job",
         "END": "END",
     }
     try:
@@ -95,9 +94,9 @@ def route_after_login(state: dict[str, Any]) -> str:
 
 def route_after_dispatch(state: dict[str, Any]) -> str:
     """Start validation for the current queued job, or return to chat when exhausted."""
-    destination = "build_validation_messages" if state.get("current_job") is not None else "collect_user_request"
+    destination = "build_validation_messages" if state.get("job_url") is not None else "collect_user_request"
     log_workflow_event(
-        "route dispath_job",
+        "route dispatch_job",
         has_next_job=state.get("has_next_job", False),
         remaining_jobs=len(state.get("application_queue", [])),
         destination=destination,
@@ -120,7 +119,7 @@ def route_after_jobright_collection(state: dict[str, Any]) -> str:
 
 def route_after_job_status_update(state: dict[str, Any]) -> str:
     """Continue a batch sequentially after persisting the current job's outcome."""
-    destination = "dispath_job" if state.get("application_queue") else "collect_user_request"
+    destination = "dispatch_job" if state.get("application_queue") else "collect_user_request"
     log_workflow_event(
         "route update_job_status",
         remaining_jobs=len(state.get("application_queue", [])),
@@ -149,7 +148,9 @@ def route_after_verification(state: dict[str, Any]) -> str:
 
 
 def submit_application_decision(state: dict[str, Any]) -> str:
-    if state["job_application_phase"] == "NEEDS_TOOLS":
+    if state["job_application_phase"] == "CONTINUE":
+        return "submit_job_application"
+    elif state["job_application_phase"] == "NEEDS_TOOLS":
         return "tool_node"
     elif state["job_application_phase"] == "REQUIRES_LOGIN":
         return "perform_login"
@@ -160,18 +161,3 @@ def submit_application_decision(state: dict[str, Any]) -> str:
     else:
         raise ValueError(f"Unsupported job_application_phase: {state['job_application_phase']}")
     
-
-# def submit_application_decision(state) -> str:
-#     if state["requires_human"]:
-#         destination = "human_in_the_loop"
-#     else:
-#         # submit_job_application has already decided the normal next step. Route
-#         # through that decision so unsuccessful applications still update status.
-#         destination = state["next_step"]
-
-#     log_workflow_event(
-#         "route submit_job_application",
-#         requires_human=state["requires_human"],
-#         destination=destination,
-#     )
-#     return destination

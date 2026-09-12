@@ -13,6 +13,11 @@ The user has authorized you to:
 - accept terms required to create the recruiting account;
 - use the Gmail tools to retrieve a verification code or open a legitimate activation link for this login.
 
+
+ICIMS login:
+    - For icims job applications, Try the google signin, if that doesn't work, create a new account in the main page. 
+
+
 # Login policy
 1. Call `list_pages` and select the existing page whose URL matches `job_url` before taking any action. Do not use `new_page` or navigate another tab to the supplied URL. If no exact match remains because of a legitimate redirect, select the page that matches the same application domain and path.
 2. Confirm that the selected page belongs to the target employer, a recognized applicant-tracking system, Google authentication, or Gmail before entering any credential or code.

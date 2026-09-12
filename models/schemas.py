@@ -2,14 +2,13 @@
 
 from typing import Literal, Union, Annotated, Optional
 from pydantic import BaseModel, Field
-from models.sub_schemas import ChatWithUserSubModel, CustomURLFromUserSubModel, DispatchJobsSubModel, FetchJobrightJobsSubModel, JobQueryFilter, InvalidJobSubModel, ValidJobSubModel
+from models.sub_schemas import ChatWithUserSubModel, ApplyForJobsSubModel, FetchJobrightJobsSubModel, JobQueryFilter, InvalidJobSubModel, ValidJobSubModel
 
 
 UserRequestAction = Annotated[
     Union[
         ChatWithUserSubModel,
-        CustomURLFromUserSubModel,
-        DispatchJobsSubModel,
+        ApplyForJobsSubModel,
         FetchJobrightJobsSubModel,
     ],
     Field(discriminator="action"),
@@ -111,13 +110,17 @@ class ApplicationNotAppliedSubModel(BaseModel):
     )
     requires_human: bool = Field(
         description=(
-            "True only for a CAPTCHA, MFA/security challenge, or another "
-            "required action the user must complete; otherwise False."
+            "True only for a missing required user fact (QUESTION) or an active "
+            "CAPTCHA/MFA/security challenge. False for ordinary form work or technical failure."
         )
     )
-    human_intervention_reason: Optional[Literal["CAPTCHA", "OTHER"]] = Field(
+    human_intervention_reason: Optional[Literal["CAPTCHA", "QUESTION", "SECURITY", "OTHER"]] = Field(
         default=None,
-        description="CAPTCHA for a CAPTCHA; OTHER for any other human-only blocker; null when requires_human is False.",
+        description="QUESTION for a missing user fact; CAPTCHA or SECURITY for a human-only challenge; OTHER for a technical failure (do not request manual form completion).",
+    )
+    question_scope: Literal["global", "employer", "job"] = Field(
+        default="job",
+        description="For QUESTION: global for reusable personal facts/preferences; employer for company-specific history; job for role-specific answers. Ask one precise question.",
     )
     human_intervention_prompt: Optional[str] = Field(
         default="",

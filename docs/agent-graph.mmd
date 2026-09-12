@@ -1,42 +1,41 @@
-%% Agent overview — import this first. Conditional tool paths are separate.
+%% Main LangGraph workflow. Import separately from agent-tool-resume.mmd.
 flowchart LR
-    start([START]) --> init[initialize_user_data]
-    init --> input[collect_user_request]
-    input --> request{understand_user_request_node}
+    start([START]) --> initialize[initialize_user_data]
+    initialize --> collect[collect_user_request]
+    collect --> request{understand_user_request_node}
 
-    request -->|CHAT| input
+    request -->|CHAT| collect
+    request -->|FETCH_JOBRIGHT_JOBS| jobright[fetch_jobright_jobs]
+    request -->|APPLY_FOR_JOBS| dispatch{dispatch_job}
     request -->|END| finish([END])
-    request -->|JOBRIGHT_JOBS| jobright[fetch_jobright_jobs]
-    jobright -->|collect more| jobright
-    jobright -->|complete| input
 
-    request -->|NEW_JOB_URL| validation_context[build_validation_messages]
-    request -->|APPLY_FOR_JOBS| queue[prepare_job_application_queue]
-    queue --> dispatch{dispath_job}
-    dispatch -->|job selected| extract[extract_job_details]
-    dispatch -->|queue empty| input
+    jobright -->|collect another job| jobright
+    jobright -->|collection complete| collect
 
-    subgraph job[Current-job preparation]
+    dispatch -->|job URL selected| validation_context[build_validation_messages]
+    dispatch -->|queue empty| collect
+
+    subgraph preparation[Current-job preparation]
         direction TB
         validation_context --> valid{is_job_valid}
-        valid -->|ELIGIBLE| extract
+        valid -->|ELIGIBLE| extract[extract_job_details]
         valid -->|NOT_ELIGIBLE| status[update_job_status]
         extract --> save[save_job_to_workbook]
-        save --> resolve{resolve_application_url}
         save --> customize[customize_resume]
-        resolve --> apply{submit_job_application}
-        customize --> apply
+        customize --> resolve{resolve_application_url}
+        resolve -->|SUCCESS| apply{submit_job_application}
     end
 
     subgraph completion[Application completion]
         direction TB
         apply -->|APPLIED| verify_context[build_verify_job_status_messages]
         verify_context --> verify{verify_job_status}
-        verify -->|APPLIED or NOT_APPLIED| status
-        apply -->|NOT_APPLIED| status
+        verify -->|APPLIED| status
+        verify -->|NOT_APPLIED| status
+        verify -->|FAILED: retry| verify
     end
 
     status -->|more queued jobs| dispatch
-    status -->|queue empty| input
+    status -->|queue empty| collect
 
-    tool_note["Tool calls and conditional error / login paths: agent-tool-resume.mmd"]
+    tool_note["Tool, login, and human-review paths: agent-tool-resume.mmd"]
