@@ -3,7 +3,6 @@ flowchart TB
     tool[tool_node]
 
     request{understand_user_request_node} -->|NEEDS_TOOLS| tool
-    jobright[fetch_jobright_jobs] -->|next_step: tool_node| tool
     validate{is_job_valid} -->|NEEDS_TOOLS| tool
     resolve{resolve_application_url} -->|NEEDS_TOOLS| tool
     login{perform_login} -->|NEEDS_TOOLS| tool
@@ -11,7 +10,6 @@ flowchart TB
     verify{verify_job_status} -->|NEEDS_TOOLS| tool
 
     tool -->|tool_call_origin| request
-    tool -->|tool_call_origin| jobright
     tool -->|tool_call_origin| validate
     tool -->|tool_call_origin| resolve
     tool -->|tool_call_origin| login

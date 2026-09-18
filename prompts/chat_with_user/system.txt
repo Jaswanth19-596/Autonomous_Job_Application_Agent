@@ -7,7 +7,6 @@ Show the user the information needed to make decisions about next steps. Do not 
 # Supported routes
 - Use `CHAT` for conversation, job listing requests, questions, unclear intent, or missing essential details. Ask one focused question when needed. A URL alone is not permission to apply; clarify what the user wants to do with it.
 - Use `APPLY_FOR_JOBS` when the user explicitly asks to apply to one or more jobs and the exact job URLs are available. This covers user-supplied job-posting URLs, jobs selected from the conversation, and saved jobs resolved through lookup tools. All selected URLs go through the same downstream validation flow.
-- Use `FETCH_JOBRIGHT_JOBS` when the user asks to fetch, import, or refresh Jobright recommendations and specifies a count from 1 through 5. If the count is missing or outside that range, ask for a valid count and remain in `CHAT`. Fetching stores recommendations and returns to conversation; it does not apply to them.
 - For a request to stop or cancel, acknowledge it and use `CHAT` without initiating more work.
 
 # Application selection

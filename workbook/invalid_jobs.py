@@ -4,8 +4,8 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
-from jobs.jobright import remove_pending_job_url
 from workbook.job_identity import canonical_job_id, canonical_job_url
+from workbook.pending_jobs import remove_pending_job_url
 
 
 def move_failed_job(pending_path: Path, invalid_path: Path, url: str, reason: str) -> None:
@@ -37,5 +37,4 @@ def move_failed_job(pending_path: Path, invalid_path: Path, url: str, reason: st
     finally:
         book.close()
 
-    # Do not remove the only copy if saving the failure raises an exception.
     remove_pending_job_url(pending_path, url)

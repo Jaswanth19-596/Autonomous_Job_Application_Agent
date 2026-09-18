@@ -101,9 +101,10 @@ def _extend_tables(sheet) -> None:
 
 
 def find_job_rows_by_canonical_url(path: Path, url: str) -> list[dict[str, str]]:
-    """Return every row matching a normalized URL without mutating the workbook."""
-    target = canonical_job_url(url)
-    if not target:
+    """Return every row matching a normalized URL or job identity without mutating the workbook."""
+    raw_url = str(url or "").strip()
+    target = canonical_job_url(raw_url)
+    if not target and not raw_url:
         return []
     workbook = load_workbook(path, read_only=True, data_only=True)
     try:
@@ -120,11 +121,19 @@ def find_job_rows_by_canonical_url(path: Path, url: str) -> list[dict[str, str]]
                 header: "" if index >= len(row) or row[index] is None else str(row[index])
                 for header, index in headers.items()
             }
-            if any(canonical_job_url(record.get(field)) == target for field in ("link", "applyUrl")):
+            if target and any(canonical_job_url(record.get(field)) == target for field in ("link", "applyUrl", "inputUrl", "url")):
                 result.append(record)
+                continue
+            if raw_url and any(str(record.get(field) or "").strip() == raw_url for field in ("link", "applyUrl", "inputUrl", "url")):
+                result.append(record)
+                continue
+            if raw_url and raw_url in job_identity_aliases(record):
+                result.append(record)
+                continue
         return result
     finally:
         workbook.close()
+
 
 
 def update_job_row(path: Path, job_id: str, updates: dict[str, Any]) -> None:

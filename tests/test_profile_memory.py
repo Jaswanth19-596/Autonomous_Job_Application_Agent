@@ -38,7 +38,8 @@ class ApplicationHandoffTests(unittest.IsolatedAsyncioTestCase):
         base = dict(log_node_stage=Mock(), load_profile=lambda: {'application_answers': {}},
                     json=json, applicable_profile=applicable_profile, recalled_answer=recalled_answer,
                     question_context=question_context, load_prompt=Mock(return_value='system'),
-                    await_with_progress=progress, logger=Mock(), visible_response_text=str)
+                    await_with_progress=progress, logger=Mock(), visible_response_text=str,
+                    application_answer_source=lambda state, profile=None: {})
         base.update(namespace)
         exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), 'exec'), base)
         return base[name]

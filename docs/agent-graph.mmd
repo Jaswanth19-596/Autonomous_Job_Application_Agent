@@ -1,41 +1,72 @@
-%% Main LangGraph workflow. Import separately from agent-tool-resume.mmd.
-flowchart LR
+%% Job Application Agent — live LangGraph workflow
+%% Source of truth: app.py, nodes.py, utilities/routing.py
+%% Paste this entire file into Excalidraw's Mermaid importer.
+flowchart TB
     start([START]) --> initialize[initialize_user_data]
     initialize --> collect[collect_user_request]
-    collect --> request{understand_user_request_node}
+    collect --> understand{understand_user_request_node}
 
-    request -->|CHAT| collect
-    request -->|FETCH_JOBRIGHT_JOBS| jobright[fetch_jobright_jobs]
-    request -->|APPLY_FOR_JOBS| dispatch{dispatch_job}
-    request -->|END| finish([END])
-
-    jobright -->|collect another job| jobright
-    jobright -->|collection complete| collect
-
-    dispatch -->|job URL selected| validation_context[build_validation_messages]
-    dispatch -->|queue empty| collect
-
-    subgraph preparation[Current-job preparation]
+    subgraph intake[Conversation and request routing]
         direction TB
-        validation_context --> valid{is_job_valid}
-        valid -->|ELIGIBLE| extract[extract_job_details]
-        valid -->|NOT_ELIGIBLE| status[update_job_status]
-        extract --> save[save_job_to_workbook]
-        save --> customize[customize_resume]
-        customize --> resolve{resolve_application_url}
-        resolve -->|SUCCESS| apply{submit_job_application}
+        understand -->|CHAT| collect
+        understand -->|APPLY_FOR_JOBS| dispatch{dispatch_job}
+        understand -->|END| finish([END])
     end
 
-    subgraph completion[Application completion]
+    subgraph application[Queued-job application workflow]
         direction TB
-        apply -->|APPLIED| verify_context[build_verify_job_status_messages]
-        verify_context --> verify{verify_job_status}
-        verify -->|APPLIED| status
-        verify -->|NOT_APPLIED| status
-        verify -->|FAILED: retry| verify
+        dispatch -->|job_url present| validation_context[is_job_valid]
+        dispatch -->|job_url absent| collect
+        validation_context --> validate{is_job_valid}
+
+        validate -->|ELIGIBLE| details[extract_job_details]
+        validate -->|NOT_ELIGIBLE| persist[update_job_status]
+        details --> save[save_job_to_workbook]
+        save --> resume[customize_resume]
+        resume --> resolve{resolve_application_url}
+
+        resolve -->|SUCCESS| submit{submit_job_application}
+        resolve -->|FAILED| review[human_in_the_loop]
+
+        submit -->|CONTINUE| submit
+        submit -->|APPLIED| verification_context[verify_job_status]
+        submit -->|NOT_APPLIED, no review| persist
+        submit -->|NOT_APPLIED, review required| review
+
+        verification_context --> verify{verify_job_status}
+        verify -->|APPLIED or NOT_APPLIED| persist
+        verify -->|FAILED| verify
+
+        persist -->|application_queue not empty| dispatch
+        persist -->|application_queue empty| collect
     end
 
-    status -->|more queued jobs| dispatch
-    status -->|queue empty| collect
+    subgraph recovery[Shared browser tools, login, and human intervention]
+        direction TB
+        tools[tool_node]
+        login{perform_login}
 
-    tool_note["Tool, login, and human-review paths: agent-tool-resume.mmd"]
+        understand -->|NEEDS_TOOLS| tools
+        validate -->|NEEDS_TOOLS| tools
+        resolve -->|NEEDS_TOOLS| tools
+        login -->|NEEDS_TOOLS| tools
+        submit -->|NEEDS_TOOLS| tools
+        verify -->|NEEDS_TOOLS| tools
+
+        tools -->|tool_call_origin| understand
+        tools -->|tool_call_origin| validate
+        tools -->|tool_call_origin| resolve
+        tools -->|tool_call_origin| login
+        tools -->|tool_call_origin| submit
+        tools -->|tool_call_origin| verify
+
+        resolve -->|REQUIRES_LOGIN| login
+        submit -->|REQUIRES_LOGIN| login
+        login -->|SUCCESS: login_return_node| resolve
+        login -->|SUCCESS: login_return_node| submit
+        login -->|FAILED| review
+
+        review -->|next_step: resolve_application_url| resolve
+        review -->|next_step: perform_login| login
+        review -->|next_step: submit_job_application| submit
+    end

@@ -2,5 +2,7 @@
 <job_url>
 {job_url}
 </job_url>
+Use the following user information if necessary to create a profile : 
+{user_profile}
 
 Authenticate to this job-application site using only the authorized methods and supplied credentials.

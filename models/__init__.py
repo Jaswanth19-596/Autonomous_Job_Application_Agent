@@ -1,23 +1,21 @@
 """Pydantic schemas used by the job-application workflow."""
 
 from .schemas import (
-    ApplicationUrlResolution,
+    ApplicationUrlResolutionResult,
     AuthenticationResult,
     JobDetailsModel,
     ValidJobOrNotDecision,
     UserRequestDecision,
     ApplicationResult,
     ApplicationVerificationResult,
-    JobrightJob,
 )
 
 __all__ = [
-    "ApplicationUrlResolution",
+    "ApplicationUrlResolutionResult",
     "AuthenticationResult",
     "JobDetailsModel",
     "ValidJobOrNotDecision",
     "UserRequestDecision",
     "ApplicationResult",
     "ApplicationVerificationResult",
-    "JobrightJob",
 ]

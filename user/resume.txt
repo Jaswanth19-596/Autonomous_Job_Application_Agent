@@ -1,12 +1,33 @@
 JASWANTH MADA
 Hammond, IN | 219-466-5564 | madhajaswanth91@gmail.com | Linkedin | Github | Portfolio
-SUMMARY
+Summary
 Applied AI / Machine Learning Engineer specializing in multi-agent orchestration, production RAG pipelines, and LLM application
 development.
-EDUCATION
-Purdue University Northwest Aug 2023 - May 2025
-Masters, Computer Science Hammond, IN
-TECHNICAL SKILLS
+EXPERIENCE
+Zenith Technology Jul 2026 - Present
+AI/ML Engineer
+• Architected an agentic QA automation platform using Python, LangGraph, and Playwright that converts user stories and acceptance
+criteria into structured test plans and executable browser workflows, leading to 50% reduction in manual test preparation time.
+• Built independent test execution and verification agents that evaluate UI behavior using DOM state, screenshots, network responses,
+console logs, and expected acceptance criteria, with a 100-case human-reviewed evaluation set designed to measure pass/fail agreement.
+• Engineered an automated failure investigation and recovery workflow that distinguishes application defects, agent execution errors,
+and infrastructure failures, gathers supporting browser and application evidence, retries recoverable failures.
+• Implemented stage-specific context and evidence selection, retry policies, and telemetry to track token usage, test latency, agent
+failures, and model cost, leading to a 25% reduction in LLM token consumption without degrading verification quality.
+Accessifiers Aug 2025 - Jun 2026
+Machine Learning Engineer
+• Engineered a RAG document intelligence platform using Python, FastAPI, LangGraph, LangChain and Pinecone, enabling
+research and engineering teams to query enterprise policy and technical documentation with source-grounded responses and reducing
+document lookup time by 35%.
+• Built an event-driven AWS S3 + Lambda ingestion pipeline to parse, chunk, embed 100K+ pages of PDF and Markdown content,
+maintaining an up-to-date vector knowledge base while avoiding unnecessary full-document reprocessing.
+• Implemented hybrid retrieval, metadata filtering, reranking, and iterative retrieval workflows, leading to higher answer relevance
+and reduced irrelevant answers by 25%.
+• Developed an automated LLM evaluation framework using RAGAS, pytest, and GitHub Actions to measure retrieval quality and
+answer groundedness before deployment, reducing release-related issues by 30%.
+• Containerized the FastAPI inference service with Docker and logged response latency, token consumption, retrieval failures,
+application errors, and model costs, maintaining average end-to-end response latency below 3 seconds.
+Skills
 • Programming & Core ML: Python, NumPy, Pandas, Scikit Learn, PyTorch
 • Agentic AI & Orchestration: Crew AI, Multi Agent Systems, ReAct Pattern, Planning Pattern, Tool Use, Agent Memory
 Management, Guardrails & Output Validation, Human-In-The-Loop, Agent Callbacks
@@ -14,40 +35,20 @@ Management, Guardrails & Output Validation, Human-In-The-Loop, Agent Callbacks
 • Databases: MySQL, PostgreSQL, DynamoDB, Redis
 • Software Engineering: OOP, Data Structures & Algorithms, Design Patterns, Multithreading, Concurrency
 • LLMs & Retrieval Systems: RAG, LangChain, Pinecone, Prompt Engineering, Embedding Based Search
-EXPERIENCE
-Accessifiers Aug 2025 - Jun 2026
-Machine Learning Engineer
-• Engineered an internal LLM-powered document Q&A system using Python, LangChain, and Pinecone, reducing time spent on policy
-and technical document lookups by 35% for research and engineering users.
-• Implemented a scalable document ingestion and chunking pipeline on AWS (S3, Lambda) to process and refresh 100K+ pages of PDFs
-and markdown content with consistent retrieval behavior.
-• Optimized prompt templates, retrieval depth, and citation logic using OpenAI APIs and prompt versioning, cutting irrelevant or partially
-grounded responses by 25% in internal validation.
-• Automated testing and deployment workflows with GitHub Actions and pytest, validating prompt changes and retrieval outputs and
-lowering release-related issues by 30%.
-• Instrumented latency, token usage, and error metrics using CloudWatch and logging, keeping average response time under 3 seconds
-while managing inference cost during peak usage.
 PROJECTS
-Autonomous Multi-Agent Job Application System | Python, LangGraph, MCP, Playwright, OpenRouter, Apify Github
-• Engineered a hierarchical multi-agent framework using LangGraph to automate end-to-end job applications, implementing a
-sequential Manager-Worker state machine with deterministic fallback for CAPTCHAs and scam detection.
-• Reduced LLM token overhead by implementing an active memory-management pipeline that prunes heavy DOM payloads from
-context windows beyond 18 conversation turns while preserving critical action history.
-• Integrated MCP-based browser and Gmail tooling with asynchronous session management, dynamic tool discovery, timeout
-handling, graceful server recovery, and human-in-the-loop interaction for unknown application questions.
-• Built a resilient tool-execution runtime with human-in-the-loop approval gates for high-risk actions, automatic exception recovery,
-and asynchronous MCP tool resolution.
-Agentic Content Writing System
-• Built a production-grade Multi-Agent content writing system, evolving from a single-agent baseline to a fully orchestrated,
-multi-role crew applying all core agentic AI patterns in a unified implementation.
-• Implemented the ReAct (Reasoning + Acting) pattern, enabling agents to reason step-by-step, dynamically select tools, and
-self-correct before producing outputs, reducing hallucinations and improving task reliability.
-• Designed a multi-agent crew with specialized roles (Researcher, Writer, and Editor) using hierarchical and sequential process
-modes with inter-agent task delegation and context passing between crew members.
-• Implemented guardrails and validation layers to intercept malformed outputs, trigger retry logic, and enforce editorial constraints
-like word count bounds before output propagation.
-• Managed short-term, long-term, entity, and contextual memory across agent interactions, enabling the crew to retain context
-across tasks and reduce redundant information retrieval.
+Job Application Agent | Python, LangGraph, LangChain, MCP, Playwright, SQLite, Apify Github
+• End-to-end orchestration: Engineered a LangGraph workflow that processes job queues, validates opportunities, navigates employer
+portals, handles authentication, and submits applications.
+• Personalized application materials: Generates role-specific LaTeX/PDF resumes and drafts screening-question answers using candidate
+experience, project evidence, and job requirements.
+• Reliable browser automation: Integrated MCP browser tools with form-field verification and repair to handle dynamic application
+forms and detect unsuccessful inputs.
+• Human-in-the-loop recovery: Pauses for CAPTCHAs, security challenges, and unanswered questions, with persistent profile memory
+that reuses answers at the appropriate candidate, employer, or job scope.
+• Resumable execution: Uses SQLite checkpoints, structured model outputs, retry policies, and diagnostic logging to support recovery
+and troubleshooting across application sessions.
+EDUCATION
+Purdue University Northwest Aug 2023 - May 2025
+Masters, Computer Science Hammond, IN
 Achievements
 • ICPC:Ranked 43 out of 89 teams in the USA Mid-Center Regional ICPC Contest.
-• IEEE Xtreme:Ranked 29 out of 149 teams in the 18th Annual Global IEEE Xtreme Programming Competition.

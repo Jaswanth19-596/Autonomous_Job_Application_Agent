@@ -2,19 +2,24 @@ Return only one complete, compilable LaTeX document. Do not include Markdown fen
 
 Use this reference template as the source of truth. Preserve its preamble, document class, packages, macros, and layout; tailor only the resume content to the job.
 
+ONE FULL PAGE — FIT AND DENSITY
+The current reference resume fits on one page. Your customized resume must also fit entirely on exactly one page, with no content spilling onto a second page. Preserve the existing fonts, margins, spacing, and layout. Match the reference’s content density and occupied vertical space, aiming for approximately 90–100% of its content height. Do not over-condense or leave a large blank bottom area. Restore relevant supported detail when underfilled; shorten or combine content only when needed to avoid overflow. Never shrink, hide, clip, or move content outside the page to force a fit.
+
 REFERENCE TEMPLATE
 {reference_resume_tex}
 
 TARGET JOB
-Company: {company}
-Title: {job_title}
-Description: {job_description}
-Responsibilities: {responsibilities}
-Required skills: {required_skills}
-Preferred skills: {preferred_skills}
+Company: {companyName}
+Title: {title}
+Full job description (including responsibilities and skills where stated):
+{descriptionText}
 
 CANDIDATE RESUME
 {resume_text}
 
 PROJECT BRIEFS
 {projects}
+
+
+EXPERIENCE BRIEFS
+{experiences}

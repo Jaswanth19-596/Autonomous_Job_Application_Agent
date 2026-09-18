@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from pathlib import Path
 import re
 from functools import wraps
@@ -9,7 +10,7 @@ from inspect import iscoroutinefunction
 from collections import deque
 from collections.abc import Awaitable, Mapping
 from datetime import datetime
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -24,6 +25,8 @@ except ImportError:
 T = TypeVar("T")
 _MAX_TOOL_OUTPUT_CHARS = 2_000
 _MAX_VALUE_CHARS = 240
+_VERBOSE_TOOL_LOGS = os.getenv("JOB_AGENT_VERBOSE_TOOL_LOGS", "0").lower() in {"1", "true", "yes"}
+
 console = Console(highlight=False)
 
 LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -44,6 +47,55 @@ if not _node_state_file_logger.handlers:
     _node_state_file_logger.addHandler(_state_file_handler)
 
 _workflow_logger = logging.getLogger("workflow_state")
+_last_logged_state_repr: Optional[str] = None
+
+_SNAPSHOT_TOOL_NAMES = {
+    "take_snapshot",
+    "take_screenshot",
+    "get_page_source",
+    "get_accessibility_tree",
+    "inspect_elements",
+    "capture_screenshot",
+    "snapshot",
+}
+
+
+def is_browser_snapshot_content(content: Any, tool_name: Optional[str] = None) -> bool:
+    """Check if the content represents a browser DOM, accessibility snapshot, or screenshot payload."""
+    if tool_name and tool_name.lower() in _SNAPSHOT_TOOL_NAMES:
+        return True
+    if isinstance(content, str):
+        # Base64 image payloads
+        if content.startswith("data:image/") or (len(content) > 100 and content.startswith(("/9j/4", "iVBORw0KGgo"))):
+            return True
+        # Chrome DevTools DOM or accessibility snapshot markers
+        if "Page snapshot:" in content or "uid=" in content or "<html" in content.lower():
+            if content.count("uid=") >= 2 or "<!DOCTYPE html" in content or "<body" in content.lower() or "Page snapshot:" in content:
+                return True
+    elif isinstance(content, dict):
+        if content.get("type") in {"snapshot", "screenshot", "image"} or "accessibilityTree" in content:
+            return True
+        if "data" in content and isinstance(content.get("data"), str) and content.get("data", "").startswith(("/9j/4", "iVBORw0KGgo")):
+            return True
+    elif isinstance(content, list):
+        if any(isinstance(item, dict) and (item.get("type") in {"image", "snapshot"} or "data" in item) for item in content):
+            return True
+    return False
+
+
+def sanitize_browser_snapshot(content: Any, tool_name: Optional[str] = None) -> Any:
+    """Omit browser snapshot data with a clean marker while leaving all other state data intact."""
+    if not is_browser_snapshot_content(content, tool_name):
+        return content
+    if isinstance(content, str):
+        if content.startswith("data:image/") or content.startswith(("/9j/4", "iVBORw0KGgo")):
+            return "[Browser Screenshot omitted]"
+        return f"[Browser Snapshot omitted (length: {len(content)} chars)]"
+    elif isinstance(content, dict):
+        return "[Browser Snapshot / Screenshot omitted]"
+    elif isinstance(content, list):
+        return [sanitize_browser_snapshot(item, tool_name) for item in content]
+    return "[Browser Snapshot omitted]"
 
 
 def _print_progress(message: str) -> None:
@@ -67,18 +119,29 @@ def log_workflow_event(event: str, **details: Any) -> None:
 
 
 def _serialize_for_state_log(obj: Any) -> Any:
-    """Safely convert state objects (including LangChain messages and Pydantic models) to JSON-serializable structures."""
-    if obj is None or isinstance(obj, (int, float, bool, str)):
+    """Safely convert state objects to JSON-serializable structures, keeping all state fields intact except browser snapshots."""
+    if obj is None or isinstance(obj, (int, float, bool)):
+        return obj
+    if isinstance(obj, str):
+        if is_browser_snapshot_content(obj):
+            return sanitize_browser_snapshot(obj)
         return obj
     if BaseMessage is not None and isinstance(obj, BaseMessage):
+        tool_name = getattr(obj, "name", None)
+        raw_content = obj.content
+        if is_browser_snapshot_content(raw_content, tool_name):
+            cleaned_content = sanitize_browser_snapshot(raw_content, tool_name)
+        else:
+            cleaned_content = _serialize_for_state_log(raw_content)
+
         msg_dict: dict[str, Any] = {
             "type": obj.__class__.__name__,
-            "content": obj.content,
+            "content": cleaned_content,
         }
-        if getattr(obj, "name", None):
-            msg_dict["name"] = obj.name
+        if tool_name:
+            msg_dict["name"] = tool_name
         if getattr(obj, "tool_calls", None):
-            msg_dict["tool_calls"] = obj.tool_calls
+            msg_dict["tool_calls"] = _serialize_for_state_log(obj.tool_calls)
         if getattr(obj, "tool_call_id", None):
             msg_dict["tool_call_id"] = obj.tool_call_id
         return msg_dict
@@ -144,10 +207,28 @@ def _format_state_summary(state: Any) -> str:
     return f" ({', '.join(parts)})" if parts else ""
 
 
-def log_node_state(node_name: str, state: Any) -> None:
-    """Log the state snapshot upon entering a workflow node to persistent log file and python logger."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+def _get_state_fingerprint(sanitized_state: dict[str, Any]) -> str:
+    """Generate a stable fingerprint to detect if the sanitized state actually changed."""
+    try:
+        return json.dumps(sanitized_state, sort_keys=True, ensure_ascii=False, default=str)
+    except Exception:
+        return str(sanitized_state)
+
+
+def log_node_state(node_name: str, state: Any, *, force: bool = False) -> bool:
+    """Log the state snapshot only when the state has changed (or when forced). Returns True if logged."""
+    global _last_logged_state_repr
+    if node_name == "tool_node":
+        return False
+
     sanitized_state = format_node_state(state)
+    current_repr = _get_state_fingerprint(sanitized_state)
+
+    if not force and _last_logged_state_repr == current_repr:
+        return False
+
+    _last_logged_state_repr = current_repr
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
     summary_lines: list[str] = []
     if isinstance(sanitized_state, dict):
@@ -169,14 +250,14 @@ def log_node_state(node_name: str, state: Any) -> None:
 
         phases: list[str] = []
         for phase_key in ("validation_phase", "resolution_phase", "login_phase", "job_application_phase", "verification_phase"):
-            if phase_key in sanitized_state:
+            if phase_key in sanitized_state and sanitized_state[phase_key]:
                 phases.append(f"{phase_key}={sanitized_state[phase_key]}")
         if phases:
             summary_lines.append(f"  • Phases: {' | '.join(phases)}")
 
         flags: list[str] = []
         for flag_key in ("requires_human", "is_applied", "is_valid", "authenticated_session"):
-            if flag_key in sanitized_state:
+            if flag_key in sanitized_state and sanitized_state[flag_key] is not None:
                 flags.append(f"{flag_key}={sanitized_state[flag_key]}")
         if flags:
             summary_lines.append(f"  • Flags: {' | '.join(flags)}")
@@ -190,7 +271,7 @@ def log_node_state(node_name: str, state: Any) -> None:
 
     log_entry = (
         f"\n{'='*80}\n"
-        f"[{timestamp}] ENTERING NODE: {node_name}\n"
+        f"[{timestamp}] STATE CHANGE / NODE: {node_name}\n"
         f"{'-'*80}\n"
         f"WORKFLOW SUMMARY:\n"
         f"{summary_section}\n"
@@ -201,12 +282,15 @@ def log_node_state(node_name: str, state: Any) -> None:
     )
 
     _node_state_file_logger.info(log_entry)
-    _workflow_logger.info(f"Entered node {node_name}")
+    _workflow_logger.info(f"State logged for node {node_name}")
+    return True
 
 
 def trace_node(function: Callable[..., T]) -> Callable[..., T]:
-    """Print concise lifecycle lines for every graph node and log state at entry."""
+    """Print concise lifecycle lines for every graph node and log state only when state changes."""
     node_name = function.__name__
+    if node_name == "tool_node":
+        return function
 
     if iscoroutinefunction(function):
         @wraps(function)
@@ -219,6 +303,10 @@ def trace_node(function: Callable[..., T]) -> Callable[..., T]:
             except Exception as exc:
                 _print_progress(f"{node_name} — failed: {type(exc).__name__}: {exc}")
                 raise
+            if isinstance(result, dict) and result:
+                updated_state = dict(state)
+                updated_state.update(result)
+                log_node_state(f"{node_name} (completed)", updated_state)
             _print_progress(f"← {node_name}")
             return result
 
@@ -234,6 +322,10 @@ def trace_node(function: Callable[..., T]) -> Callable[..., T]:
         except Exception as exc:
             _print_progress(f"{node_name} — failed: {type(exc).__name__}: {exc}")
             raise
+        if isinstance(result, dict) and result:
+            updated_state = dict(state)
+            updated_state.update(result)
+            log_node_state(f"{node_name} (completed)", updated_state)
         _print_progress(f"← {node_name}")
         return result
 
@@ -287,10 +379,12 @@ def _extract_text_output(tool_result: Any) -> str:
 
 
 def log_tool_calls(node_name: str, tool_calls: list[dict[str, Any]]) -> None:
-    """Show requested tools while keeping credentials out of the terminal."""
+    """Show requested tools only when verbose tool logging is enabled."""
+    if not _VERBOSE_TOOL_LOGS or not tool_calls:
+        return
     for index, tool_call in enumerate(tool_calls, start=1):
         arguments = json.dumps(
-            _shorten_values(_redact_sensitive_values(tool_call["args"])),
+            _shorten_values(_redact_sensitive_values(tool_call.get("args", {}))),
             indent=2,
             default=str,
             ensure_ascii=False,
@@ -303,7 +397,7 @@ def log_tool_calls(node_name: str, tool_calls: list[dict[str, Any]]) -> None:
                 title=(
                     f"[dim][{timestamp}][/dim] "
                     f"[bold cyan]{node_name}[/bold cyan] "
-                    f"[bold white]› {tool_call['name']}[/bold white]"
+                    f"[bold white]› {tool_call.get('name', 'tool')}[/bold white]"
                 ),
                 subtitle="[dim]tool call[/dim]",
                 border_style="cyan",
@@ -323,7 +417,9 @@ def _redact_sensitive_text(value: str) -> str:
 
 
 def log_tool_result(node_name: str, tool_name: str, tool_result: Any) -> None:
-    """Show a completed tool call and a safely bounded version of its output."""
+    """Show a completed tool result only when verbose tool logging is enabled."""
+    if not _VERBOSE_TOOL_LOGS:
+        return
     output = _redact_sensitive_text(_extract_text_output(tool_result)).strip()
     if len(output) > _MAX_TOOL_OUTPUT_CHARS:
         output = f"{output[:_MAX_TOOL_OUTPUT_CHARS]}... [output truncated]"

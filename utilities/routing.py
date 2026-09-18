@@ -12,17 +12,11 @@ logger = logging.getLogger(__name__)
 def route_user_request(state: dict[str, Any]) -> str:
     """Route a user request to the next workflow node."""
 
-    next_node = (
-        state.get("user_node_decision")
-        or state.get("user_request_phase")
-        or state.get("next_step")
-        or state.get("next_action")
-    )
+    next_node = state.get("user_node_decision")
 
     destinations = {
         "NEEDS_TOOLS": "tool_node",
         "CHAT": "collect_user_request",
-        "FETCH_JOBRIGHT_JOBS": "fetch_jobright_jobs",
         "APPLY_FOR_JOBS": "dispatch_job",
         "END": "END",
     }
@@ -76,25 +70,30 @@ def route_after_resolving_url(state: dict[str, Any]) -> str:
 
 
 def route_after_login(state: dict[str, Any]) -> str:
-    """Return a completed login to the node that encountered its gate."""
-    phase = state["login_phase"]
-    if phase == "NEEDS_TOOLS":
-        destination = "tool_node"
-    elif phase == "SUCCESS":
-        destination = state.get("login_return_node", "")
-        if destination not in {"resolve_application_url", "submit_job_application"}:
-            raise ValueError(f"Unsupported login return node: {destination}")
-    elif phase == "FAILED":
-        destination = "human_in_the_loop"
+    """Return a completed login to the node that encountered its gate, or update job status on failure."""
+    if state.get("next_step") == "update_job_status":
+        destination = "update_job_status"
     else:
-        raise ValueError(f"Unsupported login phase: {phase}")
-    log_workflow_event("route perform_login", phase=phase, destination=destination)
+        phase = state["login_phase"]
+        if phase == "NEEDS_TOOLS":
+            destination = "tool_node"
+        elif phase == "SUCCESS":
+            destination = state.get("login_return_node")
+            if destination not in {"resolve_application_url", "submit_job_application"}:
+                raise ValueError(f"Unsupported login return node: {destination}")
+        elif phase == "REQUIRES_HUMAN":
+            destination = "human_in_the_loop"
+        elif phase == "FAILED":
+            destination = "human_in_the_loop" if state.get("requires_human") else "update_job_status"
+        else:
+            raise ValueError(f"Unsupported login phase: {phase}")
+    log_workflow_event("route perform_login", phase=state.get("login_phase"), destination=destination)
     return destination
 
 
 def route_after_dispatch(state: dict[str, Any]) -> str:
     """Start validation for the current queued job, or return to chat when exhausted."""
-    destination = "build_validation_messages" if state.get("job_url") is not None else "collect_user_request"
+    destination = "is_job_valid" if state.get("job_url") is not None else "collect_user_request"
     log_workflow_event(
         "route dispatch_job",
         has_next_job=state.get("has_next_job", False),
@@ -102,20 +101,6 @@ def route_after_dispatch(state: dict[str, Any]) -> str:
         destination=destination,
     )
     return destination
-
-
-def route_after_jobright_collection(state: dict[str, Any]) -> str:
-    """Continue Jobright collection through the shared tool execution node."""
-    destination = state.get("next_step", "collect_user_request")
-    if destination not in {"tool_node", "fetch_jobright_jobs", "collect_user_request"}:
-        raise ValueError(f"Unsupported Jobright collection destination: {destination}")
-    log_workflow_event(
-        "route fetch_jobright_jobs",
-        destination=destination,
-        job_number=state.get("jobright_collection_job_number", 1),
-    )
-    return destination
-
 
 def route_after_job_status_update(state: dict[str, Any]) -> str:
     """Continue a batch sequentially after persisting the current job's outcome."""
@@ -148,16 +133,16 @@ def route_after_verification(state: dict[str, Any]) -> str:
 
 
 def submit_application_decision(state: dict[str, Any]) -> str:
-    if state["job_application_phase"] == "CONTINUE":
-        return "submit_job_application"
+    if state["job_application_phase"] == "NOT_APPLIED":
+        return "update_job_status"
     elif state["job_application_phase"] == "NEEDS_TOOLS":
         return "tool_node"
     elif state["job_application_phase"] == "REQUIRES_LOGIN":
         return "perform_login"
     elif state["job_application_phase"] == "APPLIED":
-        return "build_verify_job_status_messages"
-    elif state["job_application_phase"] == "NOT_APPLIED":
-        return "human_in_the_loop" if state["requires_human"] else "update_job_status"
+        return "verify_job_status"
+    elif state["job_application_phase"] == "REQUIRES_HUMAN":
+        return "human_in_the_loop"
     else:
         raise ValueError(f"Unsupported job_application_phase: {state['job_application_phase']}")
     

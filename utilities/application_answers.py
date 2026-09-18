@@ -31,13 +31,13 @@ def create_application_answer_tool(model, source_context: Mapping[str, Any]):
     """Create a drafting tool with workflow-owned evidence attached.
 
     The browser agent supplies only the question and form-specific constraints.
-    Profile, resume, job, saved answers, and project briefs come from workflow
+    Profile, resume, job, saved answers, project briefs, and experience briefs come from workflow
     state so a tool call cannot silently replace them with a short summary.
     """
 
     required_sources = {
         "job_details", "user_profile", "customized_resume",
-        "application_answers", "projects",
+        "application_answers", "projects", "experiences",
     }
     missing_sources = required_sources - source_context.keys()
     if missing_sources:
@@ -59,7 +59,7 @@ def create_application_answer_tool(model, source_context: Mapping[str, Any]):
 
         Pass the exact question and any visible options or length limits.
         The full job details, profile, customized resume text, saved answers,
-        and supporting project briefs are attached by the workflow.
+        and supporting project and experience briefs are attached by the workflow.
         Only fill an `answered` result; `needs_user_input` identifies missing facts.
         This tool generates text only; it never fills or submits the form.
         """
@@ -75,17 +75,34 @@ def create_application_answer_tool(model, source_context: Mapping[str, Any]):
             customized_resume=source_context["customized_resume"],
             application_answers=source_context["application_answers"],
             projects=source_context["projects"],
+            experiences=source_context["experiences"],
             additional_context=additional_context, answer_options=answer_options,
             max_words=max_words, max_characters=max_characters,
         )
         generator = model.with_structured_output(
-            ApplicationAnswer, method="function_calling", tool_choice="auto",
+            ApplicationAnswer, method="function_calling", tool_choice="ApplicationAnswer",
             extra_headers=opencode_session_headers(config),
         )
-        result = await generator.ainvoke([
+        messages = [
             {"role": "system", "content": load_prompt("application_answer/system.txt")},
             {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
-        ], config=config)
+        ]
+        # Some compatible providers can omit the tool call even when required.
+        # Retry once without treating a generation failure as missing user facts.
+        for attempt in range(2):
+            result = await generator.ainvoke(messages, config=config)
+            if result is not None:
+                break
+            if attempt == 0:
+                messages = [*messages, {
+                    "role": "user",
+                    "content": "Return your answer by calling the ApplicationAnswer tool exactly once.",
+                }]
+        if result is None:
+            return json.dumps({
+                "error": "The answer model returned no ApplicationAnswer after two attempts. "
+                "No answer was generated; do not fill the field with this error message.",
+            })
         result = ApplicationAnswer.model_validate(result)
         if result.status == "answered":
             if max_words is not None and len(result.answer.split()) > max_words:

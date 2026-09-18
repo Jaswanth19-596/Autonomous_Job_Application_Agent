@@ -20,6 +20,8 @@ from langchain_core.messages import (
 )
 from langchain_core.outputs import ChatGeneration, LLMResult
 
+from utilities.diagnostics import is_browser_snapshot_content, sanitize_browser_snapshot
+
 LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_FILE_PATH = LOGS_DIR / "llm_calls.log"
 
@@ -41,6 +43,7 @@ if not _llm_file_logger.handlers:
 
 def _format_message(msg: Any, index: int) -> str:
     """Format an individual input message for clean human-readable log display."""
+    tool_name = getattr(msg, "name", None)
     if isinstance(msg, SystemMessage):
         role = "SYSTEM"
         content = msg.content
@@ -67,11 +70,15 @@ def _format_message(msg: Any, index: int) -> str:
     elif isinstance(msg, dict):
         role = str(msg.get("role", "unknown")).upper()
         content = msg.get("content", str(msg))
+        tool_name = msg.get("name", tool_name)
         extra = ""
     else:
         role = type(msg).__name__.upper()
         content = getattr(msg, "content", str(msg))
         extra = ""
+
+    if is_browser_snapshot_content(content, tool_name):
+        content = sanitize_browser_snapshot(content, tool_name)
 
     lines = [f"[Message {index} | {role}]"]
     if isinstance(content, str):

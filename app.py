@@ -14,15 +14,14 @@ from nodes import (
     is_job_valid,
     tool_node,
     understand_user_request_node,
-    build_validation_messages,
-    build_verify_job_status_messages,
     verify_job_status,
     shutdown_mcp_tools,
     human_in_the_loop,
-    fetch_jobright_jobs,
     dispatch_job,
     customize_resume
 )
+from models.schemas import JobDetailsModel
+
 from langgraph.graph.message import MessagesState
 from typing import Any, Literal
 from prompts import load_prompt
@@ -30,7 +29,6 @@ from utilities import route_user_request
 from utilities.routing import (
     submit_application_decision,
     route_after_dispatch,
-    route_after_jobright_collection,
     route_after_job_status_update,
     route_after_validation,
     route_after_resolving_url,
@@ -56,9 +54,10 @@ def replace_messages(_existing: list[dict], replacement: list[dict]) -> list[dic
 class MyState(MessagesState):
     submit_job_application_messages: Annotated[list[dict], add] = []
     is_job_valid_messages: Annotated[list[dict], add] = []
-    resolve_application_url_messages: Annotated[list[dict], replace_messages] = []
-    perform_login_messages: Annotated[list[dict], replace_messages] = []
+    resolve_application_url_messages: Annotated[list[dict], add] = []
+    perform_login_messages: Annotated[list[dict], add] = []
     verify_job_status_messages: Annotated[list[dict], add] = []
+
     user_profile: dict = {}
     resume_data: str = ""
     resume_file_path: str = ""
@@ -66,35 +65,28 @@ class MyState(MessagesState):
 
     #user request phase output
     job_url: str = ""
-    user_node_decision: Literal["NEEDS_TOOLS", "CHAT", "APPLY_FOR_JOBS", "FETCH_JOBRIGHT_JOBS", "END"] = "CHAT"
+    user_node_decision: Literal["NEEDS_TOOLS", "CHAT", "APPLY_FOR_JOBS", "END"] = "CHAT"
     num_jobs_to_process: int = 0
-    job_query_filter: dict[str, Any] | None = None
+
     application_queue: list[str] = list()
     completed_jobs: Annotated[list[str], add] = []
     current_job: dict = None
     has_next_job: bool = False
 
     #customize resume phase
-    job_details: dict = None
+    job_details: JobDetailsModel = None
     customized_resume_path: str = ""
     customized_resume: str = ""
     projects: str = ""
+    experiences: str = ""
     reference_resume_path: str = ""
-
-    # Fetch JobRight Jobs
-    jobright_jobs: list[dict] = list()
-    jobright_job_count: int = 5
-    jobright_collection_messages: list = list()
-    jobright_collection_job_number: int = 1
-    jobright_excluded_jobs: list[dict[str, str]] = list()
     
     pending_jobs_path: str = ""
     applied_jobs_path: str = ""
     is_valid: bool = False
     actual_job_url: str = ""
-    authenticated_session: bool = False
+    is_authenticated: bool = False
     application_status: str = ""
-    final_status_message: str = ""
     application_messages: list[dict] = []
     tool_call_origin: str = ""
     next_step: str = ""
@@ -112,14 +104,13 @@ class MyState(MessagesState):
     validation_phase : Literal["NEEDS_TOOLS", "ELIGIBLE", "NOT_ELIGIBLE", "END"] = "ELIGIBLE"
     verification_phase : Literal["NEEDS_TOOLS", "APPLIED", "NOT_APPLIED", "END"] = "NOT_APPLIED"
     resolution_phase : Literal["NEEDS_TOOLS", "REQUIRES_LOGIN", "SUCCESS", "FAILED"] = "FAILED"
-    login_phase: Literal["NEEDS_TOOLS", "SUCCESS", "FAILED"] = "FAILED"
-    login_return_node: Literal["resolve_application_url", "submit_job_application", ""] = ""
+    login_phase: Literal["NEEDS_TOOLS", "SUCCESS", "FAILED", "REQUIRES_HUMAN"] = "FAILED"
+    login_return_node: Literal["resolve_application_url", "submit_job_application"] = None
     job_application_phase: Literal["NEEDS_TOOLS", "CONTINUE", "REQUIRES_LOGIN", "APPLIED", "NOT_APPLIED", "END"] = "NOT_APPLIED"
 
     is_applied: bool = False
     url_applied_on: str = ""
-
-    ready_to_apply: bool = False
+    final_status_message: str = ""
 
 graph = StateGraph(MyState)
 
@@ -135,7 +126,6 @@ retry_policy = RetryPolicy(
 
 graph.add_node(initialize_user_data, retry_policy=retry_policy)
 graph.add_node(collect_user_request, retry_policy=retry_policy)
-graph.add_node(fetch_jobright_jobs, retry_policy=retry_policy)
 graph.add_node(extract_job_details, retry_policy=retry_policy)
 graph.add_node(save_job_to_workbook, retry_policy=retry_policy)
 graph.add_node(is_job_valid, retry_policy=retry_policy)
@@ -146,8 +136,6 @@ graph.add_node(update_job_status, retry_policy=retry_policy)
 graph.add_node(verify_job_status, retry_policy=retry_policy)
 graph.add_node("tool_node", tool_node, retry_policy=retry_policy)
 graph.add_node(understand_user_request_node, retry_policy=retry_policy)
-graph.add_node(build_validation_messages, retry_policy=retry_policy)
-graph.add_node(build_verify_job_status_messages, retry_policy=retry_policy)
 graph.add_node(human_in_the_loop, retry_policy=retry_policy)
 graph.add_node(dispatch_job, retry_policy=retry_policy)
 graph.add_node(customize_resume, retry_policy=retry_policy)
@@ -169,12 +157,6 @@ graph.add_conditional_edges(
     "dispatch_job",
     route_after_dispatch
 )
-graph.add_conditional_edges(
-    "fetch_jobright_jobs",
-    route_after_jobright_collection
-)
-graph.add_edge("build_validation_messages", "is_job_valid")
-
 graph.add_conditional_edges(
     "is_job_valid",
     route_after_validation
@@ -198,7 +180,6 @@ graph.add_conditional_edges(
     submit_application_decision
 )
 
-graph.add_edge("build_verify_job_status_messages", "verify_job_status")
 
 
 graph.add_conditional_edges(    
@@ -216,7 +197,6 @@ graph.add_conditional_edges(
         "perform_login": "perform_login",
         "submit_job_application": "submit_job_application",
         "verify_job_status": "verify_job_status",
-        "fetch_jobright_jobs": "fetch_jobright_jobs",
     },
 )
 
@@ -224,18 +204,8 @@ graph.add_conditional_edges("human_in_the_loop", lambda state: state["next_step"
     "submit_job_application": "submit_job_application",
     "resolve_application_url": "resolve_application_url",
     "perform_login": "perform_login",
+    "update_job_status": "update_job_status",
 })
-
-# Wire the new node: only when human is required, route to submit_application_decision
-# graph.add_conditional_edges(
-#     "submit_job_application",
-#     submit_application_decision,
-#     {
-#         "human_intervention": END,
-#         "update_job_status": "update_job_status",
-#         "END": END,
-#     },
-# )
 
 
 
@@ -255,13 +225,6 @@ async def main():
     )
     workflow = graph.compile(checkpointer=checkpointer)
 
-
-    messages = [
-        {"role": "system", "content": load_prompt("chat_with_user/system.txt")},
-    ]
-
-    # A CLI launch begins a new application run. Reusing the same fixed thread
-    # ID silently resumes an old, possibly partial tool conversation.
     config = {
         "configurable": {
             "thread_id": os.getenv("JOB_AGENT_THREAD_ID", str(uuid4()))

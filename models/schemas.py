@@ -2,14 +2,12 @@
 
 from typing import Literal, Union, Annotated, Optional
 from pydantic import BaseModel, Field
-from models.sub_schemas import ChatWithUserSubModel, ApplyForJobsSubModel, FetchJobrightJobsSubModel, JobQueryFilter, InvalidJobSubModel, ValidJobSubModel
-
+from models.sub_schemas import ChatWithUserSubModel, ApplyForJobsSubModel, InvalidJobSubModel, ValidJobSubModel, ApplicationAppliedSubModel, ApplicationRequiresLoginSubModel, ApplicationRequiresHumanSubModel, ApplicationUrlReadySubModel, ApplicationUrlResolutionIssueSubModel, ApplicationUrlLoginSubModel, ApplicationSkipSubModel
 
 UserRequestAction = Annotated[
     Union[
         ChatWithUserSubModel,
         ApplyForJobsSubModel,
-        FetchJobrightJobsSubModel,
     ],
     Field(discriminator="action"),
 ]
@@ -21,9 +19,6 @@ class UserRequestDecision(BaseModel):
     decision: UserRequestAction
 
 
-class JobrightJob(BaseModel):
-    """One visible job card from Jobright's Top Matched recommendations."""
-    link: str = Field(description="The Jobright detail URL used to inspect this recommendation.")
 
 
 class JobDetailsModel(BaseModel):
@@ -52,31 +47,16 @@ class ValidJobOrNotDecision(BaseModel):
     decision: ValidJobDecision
 
 
-class ApplicationUrlResolution(BaseModel):
-    """The application URL and whether it must be authenticated first."""
 
-    ready_to_apply: bool = Field(
-        description=(
-            "True when the application form is accessible without any further "
-            "authentication. False when access is blocked or unresolved."
-        )
-    )
-    requires_login: bool = Field(
-        default=False,
-        description=(
-            "True when sign-in, account creation, or required SSO blocks the "
-            "application form and the login node should handle it."
-        ),
-    )
-    actual_job_url: str = Field(
-        description=(
-            "The final accessible application URL or the current login, blocked, "
-            "or unresolved URL when ready_to_apply is false."
-        )
-    )
-    message: str = Field(
-        description="A concise summary of URL resolution and any authentication outcome."
-    )
+ApplicationUrlDecision = Annotated[
+    Union[ApplicationUrlReadySubModel, ApplicationUrlResolutionIssueSubModel, ApplicationUrlLoginSubModel],
+    Field(discriminator="action"),
+]
+
+class ApplicationUrlResolutionResult(BaseModel):
+    result: ApplicationUrlDecision
+
+
 
 
 class AuthenticationResult(BaseModel):
@@ -88,49 +68,18 @@ class AuthenticationResult(BaseModel):
     logged_in_url: str = Field(
         description="The authenticated application URL, or the current URL on failure."
     )
-    message: str = Field(description="A concise summary of the login result.")
-
-
-
-
-class ApplicationAppliedSubModel(BaseModel):
-    is_applied: Literal[True] = True
-    final_status_message: str = Field(description="The final status message to be shown to the user.")
-    url_applied_on: str = Field(description = "URL of the page that shows job application submitted, used by other agent to verify. ")
-
-
-class ApplicationNotAppliedSubModel(BaseModel):
-    is_applied: Literal[False] = False
-    requires_login: bool = Field(
-        default=False,
-        description=(
-            "True only when a normal sign-in, account-creation, or SSO gate is "
-            "blocking the application and the login node should handle it."
-        ),
-    )
+    message: str = Field(description="This is the information that you are passing to the caller (the upstream node). It can be a request for more information or a success message or a failure message")
     requires_human: bool = Field(
-        description=(
-            "True only for a missing required user fact (QUESTION) or an active "
-            "CAPTCHA/MFA/security challenge. False for ordinary form work or technical failure."
-        )
+        default=False,
+        description="Whether human intervention is required (e.g. verifying LinkedIn/GitHub accounts, CAPTCHA, or manual 2FA)."
     )
-    human_intervention_reason: Optional[Literal["CAPTCHA", "QUESTION", "SECURITY", "OTHER"]] = Field(
-        default=None,
-        description="QUESTION for a missing user fact; CAPTCHA or SECURITY for a human-only challenge; OTHER for a technical failure (do not request manual form completion).",
-    )
-    question_scope: Literal["global", "employer", "job"] = Field(
-        default="job",
-        description="For QUESTION: global for reusable personal facts/preferences; employer for company-specific history; job for role-specific answers. Ask one precise question.",
-    )
-    human_intervention_prompt: Optional[str] = Field(
-        default="",
-        description="A concise, actionable instruction for the human to complete the blocker on the current page; empty when requires_human is False.",
-    )
+
+
 
 
 ApplicationDecision = Annotated[
-    Union[ApplicationAppliedSubModel, ApplicationNotAppliedSubModel],
-    Field(discriminator="is_applied"),
+    Union[ApplicationAppliedSubModel, ApplicationRequiresLoginSubModel, ApplicationRequiresHumanSubModel, ApplicationSkipSubModel],
+    Field(discriminator="action"),
 ]
 
 

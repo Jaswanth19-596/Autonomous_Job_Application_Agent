@@ -45,7 +45,8 @@ class InvalidJobStatusTests(unittest.IsolatedAsyncioTestCase):
             return await operation
         namespace = dict(Path=Path, __file__=str(source), move_failed_job=move_failed_job,
                          log_node_stage=Mock(), update_job_status_tool=tool,
-                         log_tool_calls=Mock(), log_tool_result=Mock(), await_with_progress=progress)
+                         log_tool_calls=Mock(), log_tool_result=Mock(), await_with_progress=progress,
+                         Overwrite=lambda x: x)
         exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), 'exec'), namespace)
         return namespace['update_job_status'], tool
 
