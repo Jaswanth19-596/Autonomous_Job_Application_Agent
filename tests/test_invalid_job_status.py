@@ -35,7 +35,7 @@ class InvalidJobStatusTests(unittest.IsolatedAsyncioTestCase):
             book.close()
 
     def load_node(self):
-        source = Path(__file__).resolve().parents[1] / 'nodes.py'
+        source = Path(__file__).resolve().parents[1] / 'application_nodes.py'
         node = next(n for n in ast.parse(source.read_text()).body
                     if isinstance(n, ast.AsyncFunctionDef) and n.name == 'update_job_status')
         node.decorator_list = []

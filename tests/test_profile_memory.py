@@ -29,7 +29,7 @@ class ProfileMemoryTests(unittest.TestCase):
 
 class ApplicationHandoffTests(unittest.IsolatedAsyncioTestCase):
     def load_node(self, name, **namespace):
-        source = Path(__file__).resolve().parents[1] / 'nodes.py'
+        source = Path(__file__).resolve().parents[1] / 'application_nodes.py'
         node = next(n for n in ast.parse(source.read_text()).body
                     if isinstance(n, ast.AsyncFunctionDef) and n.name == name)
         node.decorator_list = []

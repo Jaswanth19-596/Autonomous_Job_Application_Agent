@@ -17,7 +17,7 @@ class StopBeforeGeneration(Exception):
 class ResumeCustomizationTests(unittest.IsolatedAsyncioTestCase):
     async def capture_prompt(self, job_details, *, experience_state=None):
         # Use the real node and prompt loader; isolate model startup and output.
-        source = Path(__file__).resolve().parents[1] / "nodes.py"
+        source = Path(__file__).resolve().parents[1] / "job_nodes.py"
         node = next(n for n in ast.parse(source.read_text()).body
                     if isinstance(n, ast.AsyncFunctionDef) and n.name == "customize_resume")
         node.decorator_list = []

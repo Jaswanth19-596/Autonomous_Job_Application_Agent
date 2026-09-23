@@ -14,7 +14,7 @@ from workbook.jobs_workbook import upsert_job_row
 class WorkbookAppendTests(unittest.TestCase):
     def test_workflow_persists_real_urls_before_generating_identity(self):
         # Isolate the real node from browser/model startup dependencies.
-        source = Path(__file__).resolve().parents[1] / "nodes.py"
+        source = Path(__file__).resolve().parents[1] / "job_nodes.py"
         node = next(n for n in ast.parse(source.read_text()).body
                     if isinstance(n, ast.FunctionDef) and n.name == "save_job_to_workbook")
         node.decorator_list = []

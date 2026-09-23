@@ -88,7 +88,7 @@ When the application asks for a resume, follow this exact sequence:
 - For a missing required personal fact, use `QUESTION` and set `human_intervention_prompt` to exactly one concise factual question. Do not ask the user to enter it on the website. Their reply is saved automatically and you must enter it and continue. Do not ask for passwords, OTPs, or other secrets as profile questions. Ask separate questions separately so each saved answer has a precise meaning.
 - For CAPTCHA or security intervention, set `human_intervention_prompt` to a concise, actionable instruction identifying only the challenge the user must complete in the currently selected application page. Do not ask the user to disclose passwords, one-time codes, or other secrets in the response.
 - Do not return `REQUIRES_HUMAN` for ordinary form fields that can be completed truthfully from the supplied profile, resume, or saved answers. Continue working on the application instead.
-- Every structured response must contain exactly one `decision` object whose `action` is `APPLICATION_APPLIED`, `REQUIRES_LOGIN`, or `REQUIRES_HUMAN`. Do not invent another action or mix fields from different actions.
+- Every structured response must contain exactly one `decision` object whose `action` is `APPLICATION_APPLIED`, `REQUIRES_LOGIN`, `REQUIRES_HUMAN`, or `SKIP_JOB`. Use `SKIP_JOB` only when browsing evidence proves the application should not continue and should be recorded as not applied, such as when the posting is closed, withdrawn, or the applicant is clearly ineligible. Return `is_applied = false` and a concise, evidence-based `reason`; do not use it for a login gate or a human or technical blocker. Do not invent another action or mix fields from different actions.
 
 # Email code
 When the job application emails a code or verification link to the email, use the provided email tools to interact with the email and fetch the code or the link. And complete the step. 
@@ -118,3 +118,7 @@ Stop after verified submission, an unexpected login requirement, or a blocker th
 - Pass the exact visible question, relevant supporting details as additional_context, and any visible answer_options, max_words, or max_characters. The tool automatically receives the complete job details, user profile, customized resume text, saved applicable answers, and project briefs from workflow state; do not summarize or resend those sources.
 - The tool returns JSON with status, answer, evidence, and missing_information. For `answered`, review the evidence against the supplied facts and fill only the answer text using the normal form tools.
 - For `needs_user_input`, skip an optional field or request human intervention for a required field, explaining the missing information. Tool errors are not answers: retry a correctable request or report the blocker, never fill an error message.
+
+# Edge Cases to Handle: 
+1. Timeout Error: Sometimes, the tool execution times out, It is mostly because of the modal or pop-up blocking the tool execution. In that case, first identify the modal or pop-up and close it using the `handle_dialog` tool. If the modal or pop-up is not closed, then report the issue as `REQUIRES_HUMAN`.
+2. If you get any other exception, first analyze the exception and try to fix it. If you can't fix it, then report the issue as `REQUIRES_HUMAN`.

@@ -97,20 +97,21 @@ class ApplicationAnswerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.kwargs["config"], second.kwargs["config"])
 
     def test_experience_briefs_reach_workflow_answer_sources(self):
-        source = Path(__file__).resolve().parents[1] / "nodes.py"
-        functions = [node for node in ast.parse(source.read_text()).body
+        root = Path(__file__).resolve().parents[1]
+        sources = [root / "user_nodes.py", root / "node_shared.py"]
+        functions = [node for source in sources for node in ast.parse(source.read_text()).body
                      if isinstance(node, ast.FunctionDef)
                      and node.name in {"initialize_user_data", "application_answer_source"}]
         for node in functions:
             node.decorator_list = []
         namespace = dict(
-            __file__=str(source), Path=Path, json=json,
+            __file__=str(root / "nodes.py"), Path=Path, json=json,
             log_node_stage=Mock(), load_prompt=Mock(return_value="prompt"),
             applicable_profile=lambda profile, state: profile,
         )
-        exec(compile(ast.Module(body=functions, type_ignores=[]), str(source), "exec"), namespace)
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(root / "nodes.py"), "exec"), namespace)
         state = namespace["initialize_user_data"]({})
-        for brief in (source.parent / "user/experience").glob("*.md"):
+        for brief in (root / "user/experience").glob("*.md"):
             self.assertIn(brief.name, state["experiences"])
             self.assertIn(brief.read_text(), state["experiences"])
         state["customized_resume"] = "Resume"

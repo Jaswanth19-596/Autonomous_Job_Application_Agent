@@ -28,13 +28,12 @@ flowchart TB
         resolve -->|SUCCESS| submit{submit_job_application}
         resolve -->|FAILED| review[human_in_the_loop]
 
-        submit -->|CONTINUE| submit
         submit -->|APPLIED| verification_context[verify_job_status]
-        submit -->|NOT_APPLIED, no review| persist
-        submit -->|NOT_APPLIED, review required| review
+        submit -->|NOT_APPLIED| persist
 
         verification_context --> verify{verify_job_status}
-        verify -->|APPLIED or NOT_APPLIED| persist
+        verify -->|APPLIED| persist
+        verify -->|NOT_APPLIED| persist
         verify -->|FAILED| verify
 
         persist -->|application_queue not empty| dispatch
@@ -64,9 +63,13 @@ flowchart TB
         submit -->|REQUIRES_LOGIN| login
         login -->|SUCCESS: login_return_node| resolve
         login -->|SUCCESS: login_return_node| submit
-        login -->|FAILED| review
+        login -->|REQUIRES_HUMAN| review
+        login -->|FAILED, no human intervention| persist
 
         review -->|next_step: resolve_application_url| resolve
         review -->|next_step: perform_login| login
         review -->|next_step: submit_job_application| submit
+        review -->|next_step: update_job_status| persist
+
+        submit -->|REQUIRES_HUMAN| review
     end

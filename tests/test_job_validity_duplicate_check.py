@@ -1,8 +1,10 @@
+import json
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
+from langchain_core.messages import AIMessage, ToolMessage
 from openpyxl import Workbook
 from workbook.jobs_workbook import find_job_rows_by_canonical_url
 from nodes import is_job_valid
@@ -67,29 +69,28 @@ class JobValidityDuplicateCheckTests(unittest.IsolatedAsyncioTestCase):
             "is_job_valid_messages": [{"role": "system", "content": "system prompt"}]
         }
 
-        # Setup mock LLM response
-        mock_response = Mock()
-        mock_response.tool_calls = []
-        mock_model_instance = Mock()
-        mock_model_instance.ainvoke.return_value = mock_response
-        mock_model_tools = AsyncMock(return_value=mock_model_instance)
+        tool_call = {"name": "take_snapshot", "args": {}, "id": "snapshot-1", "type": "tool_call"}
+        state["is_job_valid_messages"].extend([
+            {"role": "user", "content": "Inspect this job."},
+            AIMessage(content="", tool_calls=[tool_call]),
+            ToolMessage(content="US remote role; OPT supported.", tool_call_id="snapshot-1"),
+        ])
+        response = AIMessage(content="The job is eligible.")
+        model = Mock(ainvoke=AsyncMock(return_value=response))
 
-        mock_decision = Mock()
-        mock_decision.valid_job = "YES"
-        mock_decision.invalid_job_reason = ""
-        mock_structured = Mock()
-        mock_structured_resp = Mock()
-        mock_structured_resp.decision = mock_decision
-        mock_structured.ainvoke.return_value = mock_structured_resp
-        mock_structured_model = Mock(return_value=mock_structured)
-
-        async def fake_await_with_progress(node, desc, coro, **kwargs):
-            return await coro if asyncio.iscoroutine(coro) else coro
-
-        import asyncio
-        with patch("nodes.get_custom_model_with_tools", mock_model_tools), \
-             patch("nodes.get_custom_structured_model", mock_structured_model), \
-             patch("nodes.await_with_progress", side_effect=fake_await_with_progress):
+        with patch("nodes.get_custom_model_with_tools", AsyncMock(return_value=model)), \
+             patch("job_nodes.use_jev", return_value={
+                 "valid_job": {"choice": "ELIGIBLE"},
+                 "invalid_job_reason": {"choice": "OTHER"},
+             }) as evaluate:
             result = await is_job_valid(state)
 
         self.assertEqual(result["validation_phase"], "ELIGIBLE")
+        self.assertFalse(result["is_applied"])
+        conversation = json.loads(evaluate.call_args.args[0])["conversation"]
+        self.assertEqual([message["role"] for message in conversation],
+                         ["system", "user", "ai", "tool", "ai"])
+        self.assertEqual(conversation[0], state["is_job_valid_messages"][0])
+        self.assertEqual(conversation[3]["content"], "US remote role; OPT supported.")
+        self.assertEqual(conversation[-1]["content"], response.content)
+        model.ainvoke.assert_awaited_once_with(state["is_job_valid_messages"])

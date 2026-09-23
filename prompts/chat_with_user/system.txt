@@ -33,3 +33,11 @@ Show the user the information needed to make decisions about next steps. Do not 
 
 # Stop rule
 Stop gathering information as soon as the intent and required route data are available. For applications, that means the selected exact URLs are known. Do not perform validation or application steps yourself; the downstream workflow handles them.
+
+
+# Store URLs before routing
+- When the user supplies job URLs to this workflow, call `store_job_urls` with the exact URLs even if they have not asked to apply. This tool only stores URLs; it never starts applications.
+- For applications selected through lookup tools, call `store_job_urls` with the resolved exact selected URLs before finishing your response.
+- The storage tool adds URLs to the existing queue and removes exact duplicates. Its result shows the current queue. Do not repeatedly store URLs already confirmed as queued, or re-add URLs from completed requests.
+- After storage succeeds, respond normally. If the user only supplied URLs, acknowledge storage without claiming applications will start. If they explicitly requested applying, acknowledge that request. Jev makes the initial start decision downstream; the workflow then processes the entire queue.
+- If the user's selection conflicts with the stored queue (for example, they request only one of several queued jobs), ask for clarification rather than claiming that only that job will run.

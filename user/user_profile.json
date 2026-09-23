@@ -350,6 +350,118 @@
       "context": "https://jobright.ai/jobs/info/6aab81cd40807b73bd39512c",
       "source": "user",
       "updated_at": "2026-09-17T08:38:43.019549+00:00"
+    },
+    "4e0472f8939a81583c1f9d933a4e904067bf8dc4e51da2afcd32aacad0597031": {
+      "question": "What is the closest description of your daily AI use in development? Choose one: I don't use it at all, Question - Answer in a chat interface, AI autocompletes my code, AI writes most or all of the code, Multiple agents writing code at any given time.",
+      "answer": "Done go ahead",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a62e0b1185082502f484326",
+      "source": "user",
+      "updated_at": "2026-09-19T04:46:35.744055+00:00"
+    },
+    "3ab92df2de167aaa9ff315b18c62aad99b42ef0bd4ad87254fc39a7862a6182a": {
+      "question": "What is the closest description of your daily AI use in development? Choose one: I don't use it at all, Question - Answer in a chat interface, AI autocompletes my code, AI writes most or all of the code, Multiple agents writing code at any given time.",
+      "answer": "AI autocompletes my code",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a52be098a74e077472f5cda",
+      "source": "user",
+      "updated_at": "2026-09-19T09:44:34.955930+00:00"
+    },
+    "8f0758473b806d95a6d800e478995b3400dc226732541441da8f4b23eeec5f51": {
+      "question": "At your most recent professional experience, how frequently (on average) did you personally ship code to production? Choose one: More than once a day, Once a day, 2-4 times a week, Once a week, Less than once a week.",
+      "answer": "Skip this application, we have already applied for this",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a52be098a74e077472f5cda",
+      "source": "user",
+      "updated_at": "2026-09-19T09:49:57.553462+00:00"
+    },
+    "a2c45448e29de5ac2692c626d98f243e887c8e1a4bdaa370939f7822e254d4b5": {
+      "question": "Do you have relatives working at ADT?",
+      "answer": "no",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6aad56112e757fcb5c8b7bd7",
+      "source": "user",
+      "updated_at": "2026-09-19T11:44:12.866658+00:00"
+    },
+    "78cb9a116868a9c6a25556b9b2d9ab2025449cde72ce5e3859c153169d429131": {
+      "question": "What is your shared Perplexity thread URL for the Exercise Submission?",
+      "answer": "Skip to the next job application.",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6aadce86de327d3e210d476a",
+      "source": "user",
+      "updated_at": "2026-09-20T13:59:10.486986+00:00"
+    },
+    "1d0b49abff355f4fbb35e6317a76a66fa91ec7a6389ecb79591c4c7a87583518": {
+      "question": "Do you meet one of these: U.S. citizen, permanent resident, or foreign national who possesses or is eligible for H-1B, TN, or O-1 visa — Yes or No?",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a76269767a1ad0bc53c8fd8",
+      "source": "user",
+      "updated_at": "2026-09-20T18:37:41.951088+00:00"
+    },
+    "9198f6e8708607efc01cf3dc56eb5ccb3a3ec863d5800d561978346ae79f699b": {
+      "question": "Do you have reliable transportation to and from your assigned work location?",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://www.dice.com/jobs?filters.postedDate=THREE&q=entry+level+ai+engineer&selectedJobId=9fc2a5c3-10b4-4ff4-95ca-a2a39b4c87df",
+      "source": "user",
+      "updated_at": "2026-09-21T05:50:05.241877+00:00"
+    },
+    "9ca8f506db53004d6fcef16213a03e9457ba03a8cd8ed9557f289eb0e5f1daf5": {
+      "question": "Do you meet all minimum qualifications for this HNTB New Grad Engineer I role, specifically a Bachelor's degree in Engineering?",
+      "answer": "Ues",
+      "scope": "job",
+      "context": "https://www.dice.com/jobs?filters.postedDate=THREE&q=entry+level+ai+engineer&selectedJobId=07585639-aab0-4d3a-a52e-ddd46aace857",
+      "source": "user",
+      "updated_at": "2026-09-21T06:07:46.509012+00:00"
+    },
+    "069fbd33e6d51e4f866e7726c0ef0411664e7d21bb5d10db6ff81d05cbb0993d": {
+      "question": "What is your month and day of birth for the required IBM verification field?",
+      "answer": "11 21",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a9e340f2c964816f65ebf25",
+      "source": "user",
+      "updated_at": "2026-09-21T08:28:22.775974+00:00"
+    },
+    "98aa784e0f20f0a98cee93f387975e550c65172ec4678e9621c1d0641a6c247d": {
+      "question": "What is Norman Villaroman's phone number to enter for Professional Reference #1?",
+      "answer": "Done, continue to next application",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a6bb7ebacb0a61f9dbc2823",
+      "source": "user",
+      "updated_at": "2026-09-21T11:10:20.139162+00:00"
+    },
+    "a8309c8b988288bfbdb30b74785628fb2da94e2406dac9013d64dc124013f7b5": {
+      "question": "What is Norman Villaroman's phone number to enter for Professional Reference 1?",
+      "answer": "I've filled it, continue with remaining sections",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab18d6a32552369083e2d30",
+      "source": "user",
+      "updated_at": "2026-09-22T03:46:38.216573+00:00"
+    },
+    "bafdac6752ca86d6c329de1c15cd1935944d0f11c13675b4f0d981b7fd05adaf": {
+      "question": "Are you willing to travel for this Junior AI Engineer role? Please answer Yes or No.",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab1b747d43eb922ca0c0d0c",
+      "source": "user",
+      "updated_at": "2026-09-22T04:40:42.287167+00:00"
+    },
+    "0254a1c773638e9f9bfb11381f2e064b2b5700bcde07a5786e9216d76056802f": {
+      "question": "Are you willing to travel for this Junior AI Engineer role? Please answer Yes or No.",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab2076af9692ca98b04c832",
+      "source": "user",
+      "updated_at": "2026-09-22T05:41:52.242547+00:00"
+    },
+    "2bae597f053f434369a17293f72dd5c8f872b6ad3041e3577a503569126719a0": {
+      "question": "Are you willing to work nights, holidays and weekends?",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab1a425f9692ca98b04ae7c",
+      "source": "user",
+      "updated_at": "2026-09-22T09:48:16.940300+00:00"
     }
   }
 }

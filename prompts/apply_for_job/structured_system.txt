@@ -6,6 +6,11 @@ Review the application submission actions, form responses, and confirmation page
 # Field Rules
 - Return exactly one top-level `decision` object. Select exactly one of the following actions and return only that action's fields.
 
+When you are not able to decide what to do, use the `REQUIRES_HUMAN` action with `human_intervention_reason = "OTHER"` and `human_intervention_prompt` set to an explanation of what you need to proceed.
+If the human is also not able to do anything, use `SKIP_JOB` action with `reason` set to an explanation of why the job could not be applied.
+
+
+
 ## `APPLICATION_APPLIED`
 - Use only when browsing evidence proves that the application was successfully submitted.
 - Return `action = "APPLICATION_APPLIED"`, `is_applied = true`, `final_status_message`, and `url_applied_on`.
@@ -20,11 +25,18 @@ Review the application submission actions, form responses, and confirmation page
 
 ## `REQUIRES_HUMAN`
 - Use only for an active human-only blocker or an exhausted technical blocker that prevents submission.
+- Make sure to use this when the human intervention is necessary such as not able to figure out the next step, not able to findout required info, website is not allowing to proceed or stuck in a loop. 
 - Return `action = "REQUIRES_HUMAN"`, `is_applied = false`, `requires_human = true`, `human_intervention_reason`, `human_intervention_prompt`, and `issue_page_url`.
 - Use `QUESTION` only for one missing required factual answer that is not resolved by the saved profile, resume, or confirmed answers. Ask exactly one concise factual question. Never request manual form completion, review, upload, or submission.
 - Use `CAPTCHA` for an active CAPTCHA. Use `SECURITY` for an active MFA, passkey, or security challenge. Request only the specific challenge action; the agent resumes and completes the rest. Never request credentials or one-time codes in the reply.
 - Use `OTHER` only after supported recovery methods have been exhausted. Identify the exact failed control or unavailable required document without asking the user to complete the rest of the application.
 - Set `issue_page_url` to the current page where the blocker is visible.
 - Do not return login or success fields.
+
+## `SKIP_JOB`
+- Use only when browsing evidence shows this application should not continue and it must be recorded as not applied—for example, the posting is closed, the employer has withdrawn it, or the applicant is clearly ineligible or the user asks to skip the application and move to next one. 
+- Return `action = "SKIP_JOB"`, `is_applied = false`, and a concise, evidence-based `reason`.
+- Do not use this action for a login gate, CAPTCHA, security challenge, missing required information, or a recoverable technical problem; use the relevant login or human-intervention action instead.
+- Do not return success, login, or human-intervention fields.
 
 Do not invent another action, omit `action`, combine fields from different actions, or claim submission without confirmation evidence.
