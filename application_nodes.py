@@ -276,6 +276,11 @@ async def submit_job_application(state):
     application_result = structured_response.decision
 
     if application_result.action == "APPLICATION_APPLIED":
+        # Stamp the applied-at timestamp in metrics
+        from utilities.application_metrics import stamp_applied_at
+        metrics = dict(state.get("application_metrics") or {})
+        if metrics:
+            stamp_applied_at(metrics)
         return {
             "job_application_phase": "APPLIED",
             "is_applied": True,
@@ -286,6 +291,7 @@ async def submit_job_application(state):
             "human_intervention_prompt": "",
             "human_intervention_origin": "",
             "submit_job_application_messages": [response],
+            "application_metrics": metrics,
             "verify_job_status_messages": [
                 SystemMessage(content=load_prompt("verify_application/system.txt")),
                 HumanMessage(
@@ -507,6 +513,13 @@ async def human_in_the_loop(state):
         "prompt": f"{state['human_intervention_prompt']}",
         "reason": f"{state['human_intervention_reason']}"
     })
+
+    # Record human intervention in metrics
+    from utilities.application_metrics import record_human_intervention
+    metrics = dict(state.get("application_metrics") or {})
+    if metrics:
+        record_human_intervention(metrics)
+    _metrics_update = {"application_metrics": metrics} if metrics else {}
     
     if state["human_intervention_origin"] == "submit_job_application":
         profile = load_profile()
@@ -525,6 +538,7 @@ async def human_in_the_loop(state):
             "human_intervention_reason": "",
             "human_intervention_prompt": "",
             "human_intervention_origin": "",
+            **_metrics_update,
         }
 
     elif state["human_intervention_origin"] == "perform_login":
@@ -541,6 +555,7 @@ async def human_in_the_loop(state):
                 "human_intervention_prompt": "",
                 "human_intervention_origin": "",
                 "perform_login_messages": Overwrite([]),
+                **_metrics_update,
             }
         return {
             "next_step": state['human_intervention_origin'],
@@ -549,6 +564,7 @@ async def human_in_the_loop(state):
             "human_intervention_reason": "",
             "human_intervention_prompt": "",
             "human_intervention_origin": "",
+            **_metrics_update,
         }
     
     elif state["human_intervention_origin"] == "resolve_application_url":
@@ -580,6 +596,7 @@ async def human_in_the_loop(state):
                 "human_intervention_prompt": "",
                 "human_intervention_origin": "",
                 "resolve_application_url_messages": Overwrite([]),
+                **_metrics_update,
             }
         return {
             "next_step": state['human_intervention_origin'],
@@ -588,6 +605,7 @@ async def human_in_the_loop(state):
             "human_intervention_reason": "",
             "human_intervention_prompt": "",
             "human_intervention_origin": "",
+            **_metrics_update,
         }
 
     else:
@@ -597,4 +615,5 @@ async def human_in_the_loop(state):
             "human_intervention_reason": "",
             "human_intervention_prompt": "",
             "human_intervention_origin": "",
+            **_metrics_update,
         }

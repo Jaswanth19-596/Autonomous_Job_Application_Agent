@@ -190,6 +190,8 @@ def is_http_job_url(value: str) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 async def tool_node(state):
+    import time
+    node_start = time.time()
     origin_node = state.get("tool_call_origin", "unknown_node")
     node_name = f"{origin_node} → tool_node"
     log_node_stage(node_name, "Started — executing tools")
@@ -208,6 +210,13 @@ async def tool_node(state):
 
     tool_calls = last_message.tool_calls
     log_tool_calls(origin_node, tool_calls)
+
+    # Accumulate tool-call counts into application metrics
+    from utilities.application_metrics import record_node_timing, record_tool_call
+    from utilities.llm_logger import clear_active_metrics, set_active_metrics
+    metrics = dict(state.get("application_metrics") or {})
+    if metrics:
+        set_active_metrics(metrics)
 
     tool_messages = []
     queue_update = {}
@@ -229,6 +238,11 @@ async def tool_node(state):
                 ToolMessage(content=error, tool_call_id=tool_call_id, name=tool_name)
             )
             continue
+
+        # Record this tool call in metrics
+        if metrics:
+            record_tool_call(metrics, tool_name)
+
         try:
             if tool_name == "store_job_urls" and origin_node != "understand_user_request_node":
                 raise ValueError("Job URLs can only be stored by the user-request node.")
@@ -285,14 +299,20 @@ async def tool_node(state):
                 )
             )
 
+    if metrics:
+        clear_active_metrics()
+        record_node_timing(metrics, node_name, time.time() - node_start)
+
+    metrics_update = {"application_metrics": metrics} if metrics else {}
+
     if origin_node == "resolve_application_url":
-        return {"resolve_application_url_messages": tool_messages}
+        return {"resolve_application_url_messages": tool_messages, **metrics_update}
     elif origin_node == "perform_login":
-        return {"perform_login_messages": tool_messages}
+        return {"perform_login_messages": tool_messages, **metrics_update}
     elif origin_node == "is_job_valid":
-        return {"is_job_valid_messages": tool_messages}
+        return {"is_job_valid_messages": tool_messages, **metrics_update}
     elif origin_node == "submit_job_application":
-        return {"submit_job_application_messages": tool_messages}
+        return {"submit_job_application_messages": tool_messages, **metrics_update}
     elif origin_node == "verify_job_status":
-        return {"verify_job_status_messages": tool_messages}
-    return {"messages": tool_messages, **queue_update}
+        return {"verify_job_status_messages": tool_messages, **metrics_update}
+    return {"messages": tool_messages, **queue_update, **metrics_update}

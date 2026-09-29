@@ -462,6 +462,166 @@
       "context": "https://jobright.ai/jobs/info/6ab1a425f9692ca98b04ae7c",
       "source": "user",
       "updated_at": "2026-09-22T09:48:16.940300+00:00"
+    },
+    "c429200f2531d6ae0295fbe723d8156243d5fb41792270137c362d5c45b63188": {
+      "question": "What City, State should I enter for your Zenith Technology AI/ML Engineer role (Jul 2026 to Present) to satisfy Indeed's required City, state field?",
+      "answer": "Put remote if it has an option or Hammond, Indiana",
+      "scope": "job",
+      "context": "https://www.indeed.com/jobs?q=AI+Engineer&l=United+States&radius=25&from=searchOnDesktopSerp%2Cwhereautocomplete&vjk=9f3e3fc63f1650aa",
+      "source": "user",
+      "updated_at": "2026-09-23T10:18:13.361406+00:00"
+    },
+    "8436b72b09298672dde3dfea2fe4812b60236d220a14a8e5d47fe0cbf789bc9d": {
+      "question": "Are you comfortable with the requirement to travel up to 20% of the time to client sites and to the Mountain View, CA office as needed? Please answer Yes or No.",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a344fb829c90c607e4de88c",
+      "source": "user",
+      "updated_at": "2026-09-23T11:28:04.909892+00:00"
+    },
+    "4fe5ec65685d9f7589de289e25a875c68809f84982ee0d9633b499e7d170263f": {
+      "question": "What is the most interesting paper, blog post, or documentation you have read in the past month, and what interested you about it?",
+      "answer": "https://claude.com/blog/building-agents-that-reach-production-systems-with-mcp Fill the answer with appropriate answer",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/68fb7918f55bb021a889a044",
+      "source": "user",
+      "updated_at": "2026-09-24T04:30:00.867284+00:00"
+    },
+    "3c0b4f0b9d7e6faa4b58cee6af2571234f13707977148ed6627682cd4305cb9b": {
+      "question": "What percentage of time do you generally enjoy spending coding?",
+      "answer": "90%",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/68fb7918f55bb021a889a044",
+      "source": "user",
+      "updated_at": "2026-09-24T04:40:41.051547+00:00"
+    },
+    "1fb8a8af55cbc9e864230139d55ead2726e460694a69b59aea51ec16aa31589e": {
+      "question": "What is the company phone number for Zenith Technology to enter in the required Company Phone Number field?",
+      "answer": "Move to next application",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab2b9d130340229a322f5f1",
+      "source": "user",
+      "updated_at": "2026-09-24T04:54:56.465805+00:00"
+    },
+    "6d041b71deb97e7032e36131fb49bdb9b7587eea48bacf1c72b502d6c69b10cf": {
+      "question": "What is your cumulative undergraduate GPA for the required Everlaw field (options: 3.9+, 3.7-3.89, 3.5-3.69, 3.0-3.49, below 3.0, N/A)?",
+      "answer": "3.5 - 3.69",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a95d42d9fcec5442372f78d",
+      "source": "user",
+      "updated_at": "2026-09-24T05:39:23.171997+00:00"
+    },
+    "e66038f6e6232e4daa5566100649c0d508d3b5104281be3cf7514856d007e9e2": {
+      "question": "Do you have any relatives or friends employed with Trinity Industries, Inc., or any of its wholly-owned subsidiaries?",
+      "answer": "No",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab44fead2f5fbd604be2d26",
+      "source": "user",
+      "updated_at": "2026-09-24T07:42:45.827347+00:00"
+    },
+    "6efa1ba0ee0a8ddd9e5d1d77cad0df20ab02148a7fc5968d0fabe574b15b09c5": {
+      "question": "Are you comfortable with an AI notetaker during your interviews? Please answer Yes or No.",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6897947f73b3a600fe89bc01",
+      "source": "user",
+      "updated_at": "2026-09-24T08:08:20.190956+00:00"
+    },
+    "d3b10a3234314699d647edd0faa9c71db07a7c6beaa21b2ba1c9b356531eeff8": {
+      "question": "Are you or any member of your family a current or former employee or official of a State, Local, or Government Entity or political party, a member of a royal family, or a candidate for political office? Please answer Yes or No.",
+      "answer": "No",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab48216ef911c35dffa56cc",
+      "source": "user",
+      "updated_at": "2026-09-24T08:38:17.429749+00:00"
+    },
+    "5295375f0725a05d87a376ba07905cfd48ef1717f10382235c48e4c1f86af0df": {
+      "question": "Is any member of your family or household a current MetLife employee or member of its Board of Directors? Please answer Yes or No.",
+      "answer": "No",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab48216ef911c35dffa56cc",
+      "source": "user",
+      "updated_at": "2026-09-24T08:44:05.872882+00:00"
+    },
+    "072116790a3607b52c67c299438984b4b2776136546360154276e4c0819d800f": {
+      "question": "What specific approach did you try in your recent AI-assisted workflow that did not work, and what would you change if you rebuilt it today?",
+      "answer": "I try to build a very flexible workflow in order to apply for job applications. I've just used two different nodes:1. The reasoning node2. The tool execution nodeThe problem was that here the LLM was the driver of the whole application. The application doesn't have any control over what happens next. A lot of the time, not the LLM was hallucinating because the context window blew up and after applying for half of the application, the LLM was not able to continue forward. I've realized this bottleneck and I've read some blogs of Anthropic and over there I learned to build a deterministic workflow using LangGraph. When the workflow is deterministic we would have much more control over how the agent behaves. Right now I've designed the job application agent in such a way that it goes through stages and at every stage it completes the specific task that it has been assigned. With the help of this I was able to make the agent more deterministic and much more efficient and powerful. The agent is working super f",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6aa3d234626f9945308b3829",
+      "source": "user",
+      "updated_at": "2026-09-25T07:09:25.881895+00:00"
+    },
+    "b54a95982ddb826f13073d4965bcfba7b2267c710e493c03de1b1a0c85e41d67": {
+      "question": "Are you related to any university employee who is in a supervisory position at ISU? Please answer Yes or No.",
+      "answer": "No",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab6b603b3db59402d101e5a",
+      "source": "user",
+      "updated_at": "2026-09-26T16:14:49.322148+00:00"
+    },
+    "e1764a4328a9e79a413270de5ba4934e2e37fe03c11b61918ffbdbd921b9ac35": {
+      "question": "May we contact your current employer? Please answer Yes or No.",
+      "answer": "No",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab6b603b3db59402d101e5a",
+      "source": "user",
+      "updated_at": "2026-09-26T16:19:58.750781+00:00"
+    },
+    "1e0143cc22642233bff527bb3a0ba395dff43bdc69cc5462050eb64d6c4ca5af": {
+      "question": "Have you ever been found responsible for harassment or discrimination through prior employment, legal action, or administrative agency proceedings? Please answer Yes or No.",
+      "answer": "No",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab6b603b3db59402d101e5a",
+      "source": "user",
+      "updated_at": "2026-09-26T16:20:37.087862+00:00"
+    },
+    "59756b61ff98b6c395c5161d0bc27a312cafb4b5c9b0a9115819dc31d2ca4e2b": {
+      "question": "Have you ever been found responsible of professional misconduct or received sanctions? Please answer Yes or No.",
+      "answer": "No",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab6b603b3db59402d101e5a",
+      "source": "user",
+      "updated_at": "2026-09-26T16:22:28.020968+00:00"
+    },
+    "b28192e5709bc967f2b464a3951a64d6820b6218a160d38b7e55b9874c5085d2": {
+      "question": "Do you have a valid driver's license? Please answer Yes or No.",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6a7e1a58ad9ff00c26ba9db2",
+      "source": "user",
+      "updated_at": "2026-09-26T19:20:13.073343+00:00"
+    },
+    "987a0a8022f475c18560c7ff33ebaa0455eecdc38792175f86b14a81f53a6ec5": {
+      "question": "What expected graduation month and year should I select for this C3 AI application?",
+      "answer": "I selected december 2026",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6aa8242b3a9f0a4fe6f177ec",
+      "source": "user",
+      "updated_at": "2026-09-29T05:57:06.830085+00:00"
+    },
+    "9f98a110f002b187673685a9f7a389e865d445772b5142f5d88eb58b81b34ba5": {
+      "question": "What is your level of proficiency in Chinese? Options: None, Conversational, Professional, Native or bilingual.",
+      "answer": "None",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab1ea78d2a93d5a97ebd316",
+      "source": "user",
+      "updated_at": "2026-09-29T06:11:49.363325+00:00"
+    },
+    "6802f3fd3d48756be105f12e8457ab0839bde8347f082e11a3fd160def56b3ee": {
+      "question": "What monthly expected salary in SGD should I enter?",
+      "answer": "4000",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab1ea78d2a93d5a97ebd316",
+      "source": "user",
+      "updated_at": "2026-09-29T06:16:41.052697+00:00"
+    },
+    "fc56da59244f85aa967d4e819a55658ecfe617fac4bb891b1781aec20814a86e": {
+      "question": "Are you open to relocating to Singapore? Please answer Yes or No.",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6ab1ea78d2a93d5a97ebd316",
+      "source": "user",
+      "updated_at": "2026-09-29T06:22:43.433986+00:00"
     }
   }
 }

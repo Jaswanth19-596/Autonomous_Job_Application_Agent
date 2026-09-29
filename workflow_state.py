@@ -66,6 +66,9 @@ class MyState(MessagesState):
     application_started_at: float | None = None
     application_elapsed_seconds: float | None = None
 
+    # Per-application metrics accumulator (serialized as dict for checkpointing).
+    application_metrics: dict = {}
+
     # Application completed fields
     validation_phase : Literal["NEEDS_TOOLS", "ELIGIBLE", "NOT_ELIGIBLE", "END"] = "ELIGIBLE"
     verification_phase : Literal["NEEDS_TOOLS", "APPLIED", "NOT_APPLIED", "END"] = "NOT_APPLIED"

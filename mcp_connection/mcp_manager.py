@@ -1,8 +1,10 @@
 import asyncio
 import json
 import sys
+import shutil
 from contextlib import asynccontextmanager
-from subprocess import DEVNULL, Popen
+from subprocess import DEVNULL, Popen, TimeoutExpired, run
+from tempfile import TemporaryFile
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
@@ -53,6 +55,38 @@ async def list_workspace_roots(_: object) -> types.ListRootsResult:
     )
 
 
+def chrome_server_config():
+    """Use a supported Node runtime even when launched outside an nvm shell."""
+    configured = os.getenv("JOB_AGENT_NODE_BINARY")
+    current = shutil.which("node")
+    candidates = [Path(configured)] if configured else (
+        ([Path(current)] if current else [])
+        + sorted((Path.home() / ".nvm/versions/node").glob("*/bin/node"), reverse=True)
+    )
+    for node in candidates:
+        try:
+            result = run([str(node), "--version"], capture_output=True, text=True, timeout=5)
+            major, minor, *_ = map(int, result.stdout.strip().lstrip("v").split("."))
+            if result.returncode or not (
+                (major == 20 and minor >= 19) or (major == 22 and minor >= 12)
+                or (major >= 24 and major % 2 == 0)
+            ):
+                continue
+        except (OSError, ValueError, TimeoutExpired):
+            continue
+        npx = node.parent / "npx"
+        if not npx.is_file():
+            continue
+        config = dict(SERVERS["chrome"])
+        config["command"] = str(npx)
+        config["env"] = {**os.environ, "PATH": str(node.parent) + os.pathsep + os.environ.get("PATH", "")}
+        return config
+    raise RuntimeError(
+        "Chrome MCP requires Node 20.19+, 22.12+, or a newer LTS with npx. "
+        "Set JOB_AGENT_NODE_BINARY to a compatible Node executable."
+    )
+
+
 @asynccontextmanager
 async def silent_stdio_session(server_config):
     """Create one Chrome MCP session without forwarding server diagnostics."""
@@ -62,15 +96,30 @@ async def silent_stdio_session(server_config):
         env=server_config.get("env"),
         cwd=server_config.get("cwd"),
     )
-    with open(os.devnull, "w", encoding="utf-8") as stderr:
-        async with stdio_client(params, errlog=stderr) as (read, write):
-            async with ClientSession(
-                read,
-                write,
-                list_roots_callback=list_workspace_roots,
-            ) as session:
-                await session.initialize()
-                yield session
+    # Keep diagnostics quiet on success, but preserve startup failures.
+    with TemporaryFile(mode="w+b") as stderr:
+        initialized = False
+        try:
+            async with stdio_client(params, errlog=stderr) as (read, write):
+                async with ClientSession(
+                    read,
+                    write,
+                    list_roots_callback=list_workspace_roots,
+                ) as session:
+                    await session.initialize()
+                    initialized = True
+                    yield session
+        except Exception as exc:
+            if initialized:
+                raise
+            stderr.seek(0, os.SEEK_END)
+            size = stderr.tell()
+            stderr.seek(max(0, size - 8192))
+            diagnostics = stderr.read().decode("utf-8", errors="replace").strip()
+            raise RuntimeError(
+                "Chrome MCP server failed to initialize. "
+                + (diagnostics or str(exc))
+            ) from exc
 
 
 SCOPES = [
@@ -244,7 +293,8 @@ class MCPManager:
     async def _run_chrome_session(self):
         """Own Chrome's context manager for its entire lifetime."""
         try:
-            async with silent_stdio_session(SERVERS["chrome"]) as session:
+            config = await asyncio.to_thread(chrome_server_config)
+            async with silent_stdio_session(config) as session:
                 self.chrome_session = session
                 self.chrome_tools = await load_mcp_tools(session)
                 self._chrome_ready.set()
@@ -285,7 +335,9 @@ class MCPManager:
 
         await self._chrome_ready.wait()
         if self._chrome_error is not None:
-            await self._chrome_task
+            error = self._chrome_error
+            await self._stop_chrome_session()
+            raise error
 
     async def _stop_chrome_session(self):
         """Close a stale Chrome MCP session without disturbing Gmail."""

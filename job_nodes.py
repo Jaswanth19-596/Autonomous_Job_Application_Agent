@@ -76,11 +76,6 @@ async def is_job_valid(state):
 
     log_node_stage(node_name, "Jev is deciding if the job is valid or not")
 
-    for message in messages:
-        print(message.type)
-
-    messages = messages + messages + messages + messages + messages
-
     jev_output = None
 
     while(True):
@@ -115,6 +110,10 @@ async def is_job_valid(state):
                         "NEEDS_SECURITY_CLERANCE": "The job explicitly requires a security clearance (e.g., 'Public Trust', 'Secret', 'TS/SCI') that you do not possess.",
                         "DOESNT_MEET_REQUIREMENTS": "The job requirements are not met with respect to your profile",
                         "BLOCKED_BY_LOGIN": "The job is blocked by a login page and you are not able to access the job details",
+                        "JOB_CLOSED_OR_EXPIRED": "The job is closed or expired",
+                        "NOT_A_JOB_POSTING": "The page is not a job posting",
+                        "ALREADY_APPLIED": "The job is already applied",
+                        "PAGE_IN_FOREIGN_LANGUAGE": "The job posting is in a foreign language",
                         "OTHER": "Other reason"
                     }
                 }
@@ -383,7 +382,7 @@ async def customize_resume(state):
     # Save the generated source and compile the matching PDF beside it.
     company = safe_resume_filename_part(job_details.get("companyName") or "Resume")
     title = safe_resume_filename_part(job_details.get("title") or f"Job_{random.randint(1000, 9999)}")
-    tex_path = Path("resumes") / f"{company}_{title}.tex"
+    tex_path = Path("resumes") / f"{company}_{title}/jaswanth_resume.tex"
     tex_path.parent.mkdir(parents=True, exist_ok=True)
     latex_source = resume_latex_source(visible_response_text(response.content))
     tex_path.write_text(latex_source, encoding="utf-8")

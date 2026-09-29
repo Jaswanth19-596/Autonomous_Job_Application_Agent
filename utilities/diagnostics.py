@@ -298,11 +298,28 @@ def trace_node(function: Callable[..., T]) -> Callable[..., T]:
             log_node_state(node_name, state)
             state_summary = _format_state_summary(state)
             _print_progress(f"→ {node_name}{state_summary}")
+            _node_start = datetime.now()
+            metrics = state.get("application_metrics")
+            if metrics is not None:
+                from utilities.llm_logger import set_active_metrics
+                set_active_metrics(metrics)
             try:
                 result = await function(state, *args, **kwargs)
             except Exception as exc:
                 _print_progress(f"{node_name} — failed: {type(exc).__name__}: {exc}")
                 raise
+            finally:
+                if metrics is not None:
+                    from utilities.llm_logger import clear_active_metrics
+                    clear_active_metrics()
+            _node_elapsed = (datetime.now() - _node_start).total_seconds()
+            # Accumulate per-node timing into application metrics
+            if isinstance(result, dict):
+                from utilities.application_metrics import record_node_timing
+                metrics = dict(result.get("application_metrics") or state.get("application_metrics") or {})
+                if metrics:
+                    record_node_timing(metrics, node_name, _node_elapsed)
+                    result["application_metrics"] = metrics
             if isinstance(result, dict) and result:
                 updated_state = dict(state)
                 updated_state.update(result)
@@ -317,11 +334,28 @@ def trace_node(function: Callable[..., T]) -> Callable[..., T]:
         log_node_state(node_name, state)
         state_summary = _format_state_summary(state)
         _print_progress(f"→ {node_name}{state_summary}")
+        _node_start = datetime.now()
+        metrics = state.get("application_metrics")
+        if metrics is not None:
+            from utilities.llm_logger import set_active_metrics
+            set_active_metrics(metrics)
         try:
             result = function(state, *args, **kwargs)
         except Exception as exc:
             _print_progress(f"{node_name} — failed: {type(exc).__name__}: {exc}")
             raise
+        finally:
+            if metrics is not None:
+                from utilities.llm_logger import clear_active_metrics
+                clear_active_metrics()
+        _node_elapsed = (datetime.now() - _node_start).total_seconds()
+        # Accumulate per-node timing into application metrics
+        if isinstance(result, dict):
+            from utilities.application_metrics import record_node_timing
+            metrics = dict(result.get("application_metrics") or state.get("application_metrics") or {})
+            if metrics:
+                record_node_timing(metrics, node_name, _node_elapsed)
+                result["application_metrics"] = metrics
         if isinstance(result, dict) and result:
             updated_state = dict(state)
             updated_state.update(result)

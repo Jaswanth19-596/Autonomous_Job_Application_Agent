@@ -52,9 +52,13 @@ JOB_COLUMNS = (
 APPLICATION_METRIC_COLUMNS = (
     "application_started_at",
     "application_finished_at",
-    "application_duration_seconds",
-    "application_tool_calls",
+    "application_elapsed_seconds",
     "application_cost_usd",
+    "application_tool_calls",
+    "llm_call_count",
+    "total_tokens",
+    "human_intervention_count",
+    "applied_at",
 )
 
 

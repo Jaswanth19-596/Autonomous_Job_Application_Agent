@@ -22,6 +22,8 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 
 from utilities.diagnostics import is_browser_snapshot_content, sanitize_browser_snapshot
 
+import threading
+
 LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_FILE_PATH = LOGS_DIR / "llm_calls.log"
 
@@ -91,6 +93,24 @@ def _format_message(msg: Any, index: int) -> str:
     if extra:
         lines.append(extra)
     return "\n".join(lines)
+
+
+# Thread-local storage for the active application metrics dict.
+_metrics_local = threading.local()
+
+
+def set_active_metrics(metrics: dict[str, Any] | None) -> None:
+    """Point the logger at the current application's metrics dict."""
+    _metrics_local.metrics = metrics
+
+
+def clear_active_metrics() -> None:
+    """Detach the logger from any application metrics."""
+    _metrics_local.metrics = None
+
+
+def get_active_metrics() -> dict[str, Any] | None:
+    return getattr(_metrics_local, "metrics", None)
 
 
 class LLMLoggerCallbackHandler(BaseCallbackHandler):
@@ -189,17 +209,29 @@ class LLMLoggerCallbackHandler(BaseCallbackHandler):
         output_text = "\n\n".join(output_blocks) if output_blocks else "(No text content generated)"
         tool_calls_text = "\n".join(tool_call_blocks) if tool_call_blocks else "(None)"
 
-        # Parse token usage
+        # Parse token usage and accumulate into application metrics
         token_usage_str = ""
+        _input_tokens = 0
+        _output_tokens = 0
         if response.llm_output and "token_usage" in response.llm_output:
             tu = response.llm_output["token_usage"]
             prompt_tokens = tu.get("prompt_tokens", "N/A")
             completion_tokens = tu.get("completion_tokens", "N/A")
             total_tokens = tu.get("total_tokens", "N/A")
+            _input_tokens = prompt_tokens if isinstance(prompt_tokens, int) else 0
+            _output_tokens = completion_tokens if isinstance(completion_tokens, int) else 0
             token_usage_str = f"\n[Token Usage] Prompt: {prompt_tokens} | Completion: {completion_tokens} | Total: {total_tokens}"
         elif response.llm_output and "usage" in response.llm_output:
             tu = response.llm_output["usage"]
+            _input_tokens = tu.get("input_tokens", tu.get("prompt_tokens", 0)) or 0
+            _output_tokens = tu.get("output_tokens", tu.get("completion_tokens", 0)) or 0
             token_usage_str = f"\n[Token Usage] {json.dumps(tu)}"
+
+        # Pipe into the per-application metrics accumulator if one is active
+        active_metrics = get_active_metrics()
+        if active_metrics is not None and (_input_tokens or _output_tokens):
+            from utilities.application_metrics import record_llm_usage
+            record_llm_usage(active_metrics, model_name, _input_tokens, _output_tokens)
 
         joined_messages = "\n\n".join(formatted_messages)
 
