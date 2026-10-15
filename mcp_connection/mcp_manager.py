@@ -210,6 +210,37 @@ async def ensure_chrome_debugger() -> None:
     )
 
 
+async def close_chrome_debugger() -> None:
+    """Gracefully exit only Chrome at the agent's dedicated debugging endpoint.
+
+    Browser.close exits the entire browser, including extension processes;
+    closing tabs or disconnecting a CDP client does not. Keep the profile on
+    disk so the next launch can reuse saved authentication.
+    """
+    if not await asyncio.to_thread(_chrome_debugger_is_ready):
+        return
+
+    from playwright.async_api import Error, async_playwright
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.connect_over_cdp(
+            CHROME_DEBUG_URL, timeout=10_000
+        )
+        session = await browser.new_browser_cdp_session()
+        try:
+            await asyncio.wait_for(session.send("Browser.close"), timeout=10)
+        except Error:
+            # Chrome can disconnect before acknowledging its own shutdown.
+            if browser.is_connected():
+                raise
+
+    for _ in range(40):
+        if not await asyncio.to_thread(_chrome_debugger_is_ready):
+            return
+        await asyncio.sleep(0.25)
+    raise RuntimeError("Dedicated Chrome did not shut down; next job was not started.")
+
+
 def _save_gmail_credentials(credentials: Credentials) -> None:
     """Persist credentials with owner-only file permissions."""
     GMAIL_TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -381,6 +412,11 @@ class MCPManager:
             self._chrome_ready = None
             self._chrome_stop = None
             self._chrome_error = None
+
+    async def close_browser(self):
+        """Release MCP collectors, then exit the dedicated browser between jobs."""
+        await self._stop_chrome_session()
+        await close_chrome_debugger()
 
     async def _ensure_gmail_session(self):
         if self._gmail_task is None:

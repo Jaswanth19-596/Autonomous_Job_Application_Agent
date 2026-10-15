@@ -8,7 +8,63 @@ from subprocess import CompletedProcess
 from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
 
-from mcp_connection.mcp_manager import MCPManager, chrome_server_config, silent_stdio_session
+from mcp_connection.mcp_manager import MCPManager, chrome_server_config, silent_stdio_session, close_chrome_debugger, CHROME_DEBUG_URL
+
+
+class BrowserLifecycleTests(unittest.IsolatedAsyncioTestCase):
+    async def test_absent_browser_is_not_launched_for_cleanup(self):
+        with patch('mcp_connection.mcp_manager._chrome_debugger_is_ready', return_value=False), patch('playwright.async_api.async_playwright') as factory:
+            await close_chrome_debugger()
+        factory.assert_not_called()
+
+    async def test_close_targets_browser_endpoint_and_waits_for_exit(self):
+        session = SimpleNamespace(send=AsyncMock())
+        browser = SimpleNamespace(new_browser_cdp_session=AsyncMock(return_value=session))
+        chromium = SimpleNamespace(connect_over_cdp=AsyncMock(return_value=browser))
+        context = AsyncMock()
+        context.__aenter__.return_value = SimpleNamespace(chromium=chromium)
+        with patch('playwright.async_api.async_playwright', return_value=context), patch('mcp_connection.mcp_manager._chrome_debugger_is_ready', side_effect=[True, True, False]), patch('mcp_connection.mcp_manager.asyncio.sleep', new_callable=AsyncMock):
+            await close_chrome_debugger()
+        chromium.connect_over_cdp.assert_awaited_once_with(CHROME_DEBUG_URL, timeout=10_000)
+        session.send.assert_awaited_once_with('Browser.close')
+
+    async def test_shutdown_failure_is_not_silently_ignored(self):
+        session = SimpleNamespace(send=AsyncMock())
+        browser = SimpleNamespace(new_browser_cdp_session=AsyncMock(return_value=session))
+        context = AsyncMock()
+        context.__aenter__.return_value = SimpleNamespace(chromium=SimpleNamespace(connect_over_cdp=AsyncMock(return_value=browser)))
+        with patch('playwright.async_api.async_playwright', return_value=context), patch('mcp_connection.mcp_manager._chrome_debugger_is_ready', return_value=True), patch('mcp_connection.mcp_manager.asyncio.sleep', new_callable=AsyncMock):
+            with self.assertRaisesRegex(RuntimeError, 'next job was not started'):
+                await close_chrome_debugger()
+
+    async def test_each_job_gets_fresh_session_and_gmail_is_untouched(self):
+        for backend in ('chrome', 'playwright'):
+            with patch.dict(os.environ, {'JOB_AGENT_BROWSER_MCP': backend}):
+                manager = MCPManager()
+            events = []
+            gmail = object()
+            manager.gmail_session = gmail
+            tool = SimpleNamespace(name='trigger_extension_action')
+
+            @asynccontextmanager
+            async def session(config):
+                events.append('start')
+                yield object()
+                events.append('stop')
+
+            async def close():
+                events.append('close')
+
+            with patch('mcp_connection.mcp_manager.ensure_chrome_debugger', new_callable=AsyncMock) as launch, patch('mcp_connection.mcp_manager.chrome_server_config', return_value={}), patch('mcp_connection.mcp_manager.silent_stdio_session', session), patch('mcp_connection.mcp_manager.load_mcp_tools', new_callable=AsyncMock, return_value=[tool]), patch('mcp_connection.mcp_manager.close_chrome_debugger', side_effect=close):
+                await manager.start(['chrome'])
+                await manager.close_browser()
+                self.assertEqual(manager.chrome_tools, [])
+                self.assertIsNone(manager.chrome_session)
+                self.assertIs(manager.gmail_session, gmail)
+                await manager.start(['chrome'])
+                await manager.close_browser()
+                self.assertEqual(launch.await_count, 2)
+            self.assertEqual(events, ['start', 'stop', 'close', 'start', 'stop', 'close'])
 
 
 class RuntimeTests(unittest.TestCase):

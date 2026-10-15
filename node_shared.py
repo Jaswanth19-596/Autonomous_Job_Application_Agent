@@ -197,6 +197,16 @@ async def shutdown_mcp_tools():
     await mcp_manager.stop()
 
 
+async def close_application_browser(state):
+    """Run after the outcome is checkpointed, before dispatching another job."""
+    log_node_stage("close_application_browser", "Closing dedicated Chrome after job completion")
+    # Drop wrappers retaining the old MCP session before stopping its owner.
+    for tool in mcp_manager.chrome_tools:
+        tools_by_name.pop(tool.name, None)
+    await mcp_manager.close_browser()
+    return {}
+
+
 def is_http_job_url(value: str) -> bool:
     """Return whether a routing decision contains a usable job-posting URL."""
     parsed = urlparse(value.strip())

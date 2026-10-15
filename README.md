@@ -101,4 +101,10 @@ profile and debugging endpoint, preserving browser logins for comparison.
 Playwright MCP is pinned to 0.0.83 and downloaded by npx on first use.
 The existing JOB_AGENT_NODE_BINARY and JOB_AGENT_CHROME_* settings still apply.
 This switches the automation server; it does not remove Chrome's memory usage.
-The dedicated Chrome window remains open when the agent stops.
+After each job's final outcome is saved, the workflow stops the browser MCP
+session and gracefully exits the dedicated Chrome instance. The next job
+reopens Chrome when it first needs browser tools, using the same profile to
+preserve saved logins. This applies to both browser backends and also closes
+Chrome after the final job. Login/CAPTCHA pauses keep the browser open.
+Only the configured dedicated debugging endpoint is closed; do not point it
+at your everyday browser. Shutdown failures stop the batch before the next job.

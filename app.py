@@ -41,6 +41,7 @@ from langgraph.types import RetryPolicy
 from langchain_core.exceptions import OutputParserException
 from langchain_openai.chat_models.base import OpenAIRateLimitError
 from workflow_state import MyState
+from node_shared import close_application_browser
 from workbook.drive import DriveStorageError
 
 graph = StateGraph(MyState)
@@ -70,6 +71,7 @@ graph.add_node(understand_user_request_node, retry_policy=retry_policy)
 graph.add_node(human_in_the_loop, retry_policy=retry_policy)
 graph.add_node(dispatch_job, retry_policy=retry_policy)
 graph.add_node(customize_resume, retry_policy=retry_policy)
+graph.add_node(close_application_browser)
 
 
 graph.add_edge(START, "initialize_user_data")
@@ -102,9 +104,11 @@ graph.add_conditional_edges(
     "resolve_application_url",
     route_after_resolving_url
 )
+graph.add_edge("update_job_status", "close_application_browser")
 graph.add_conditional_edges(
-    "update_job_status",
-    route_after_job_status_update
+    "close_application_browser",
+    route_after_job_status_update,
+    {"dispatch_job": "dispatch_job", "END": END},
 )
 
 
