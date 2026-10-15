@@ -78,33 +78,20 @@ it does **not** download current Drive data, so do not use it as an automatic
 offline fallback. `JOB_AGENT_DRIVE_CONFIG` and `JOB_AGENT_DRIVE_TOKEN_PATH` can
 override the configuration and token locations.
 
-### Compare Playwright and Chrome MCP
+### Chrome DevTools MCP
 
-The custom agent supports either browser MCP through `JOB_AGENT_BROWSER_MCP`.
-To run with Playwright:
+The agent uses Chrome DevTools MCP for navigation, page inspection, form filling,
+submission verification, and extension actions. All tools exposed by the
+configured Chrome MCP server are available; there is no one-tool allowlist.
+Playwright MCP and its prompt adapter have been removed. The old
+`JOB_AGENT_BROWSER_MCP` setting is no longer used.
+The existing `JOB_AGENT_NODE_BINARY` and `JOB_AGENT_CHROME_*` settings still apply.
+The Python Playwright library remains an internal helper for graceful Chrome
+shutdown over CDP; it does not provide the agent's tools.
 
-```bash
-JOB_AGENT_BROWSER_MCP=playwright uv run python app.py
-```
-
-Use `JOB_AGENT_BROWSER_MCP=chrome` for Chrome DevTools MCP (the default).
-In this mode, the agent receives only `trigger_extension_action`; all other
-Chrome MCP tools are excluded by an explicit allowlist. Supply the installed
-extension's ID to activate it. Navigation, page inspection, form filling, and
-submission verification through Chrome MCP are unavailable in this mode.
-This prevents agent calls to expensive diagnostic tools; it does not cap Chrome
-memory or disable the browser's own background work. Playwright mode remains
-separate and retains its browser tools.
-You can also set this variable in `.env`. Restart the agent after switching.
-Only the selected browser MCP is started. Both use the same dedicated Chrome
-profile and debugging endpoint, preserving browser logins for comparison.
-Playwright MCP is pinned to 0.0.83 and downloaded by npx on first use.
-The existing JOB_AGENT_NODE_BINARY and JOB_AGENT_CHROME_* settings still apply.
-This switches the automation server; it does not remove Chrome's memory usage.
 After each job's final outcome is saved, the workflow stops the browser MCP
 session and gracefully exits the dedicated Chrome instance. The next job
 reopens Chrome when it first needs browser tools, using the same profile to
-preserve saved logins. This applies to both browser backends and also closes
-Chrome after the final job. Login/CAPTCHA pauses keep the browser open.
+preserve saved logins. Chrome also closes after the final job. Login/CAPTCHA pauses keep the browser open.
 Only the configured dedicated debugging endpoint is closed; do not point it
 at your everyday browser. Shutdown failures stop the batch before the next job.

@@ -55,7 +55,7 @@ async def list_workspace_roots(_: object) -> types.ListRootsResult:
     )
 
 
-def chrome_server_config(server="chrome"):
+def chrome_server_config():
     """Use a supported Node runtime even when launched outside an nvm shell."""
     configured = os.getenv("JOB_AGENT_NODE_BINARY")
     current = shutil.which("node")
@@ -77,7 +77,7 @@ def chrome_server_config(server="chrome"):
         npx = node.parent / "npx"
         if not npx.is_file():
             continue
-        config = dict(SERVERS[server])
+        config = dict(SERVERS["chrome"])
         config["command"] = str(npx)
         config["env"] = {**os.environ, "PATH": str(node.parent) + os.pathsep + os.environ.get("PATH", "")}
         return config
@@ -142,12 +142,6 @@ client_config = {
 }
 
 SERVERS = {
-        "playwright": {
-            "transport": "stdio",
-            "command": "npx",
-            "args": ["-y", "@playwright/mcp@0.0.83",
-                     "--cdp-endpoint", CHROME_DEBUG_URL],
-        },
         "chrome": {
             "transport": "stdio",
             "command": "npx",
@@ -313,9 +307,6 @@ class MCPManager:
     """Provide persistent MCP tools while keeping session ownership task-local."""
 
     def __init__(self):
-        self.browser_backend = os.getenv("JOB_AGENT_BROWSER_MCP", "chrome").strip().lower()
-        if self.browser_backend not in {"chrome", "playwright"}:
-            raise ValueError("JOB_AGENT_BROWSER_MCP must be chrome or playwright")
         self.mcp_client = MultiServerMCPClient(SERVERS)
         self.gmail_tools = []
         self.chrome_tools = []
@@ -333,22 +324,10 @@ class MCPManager:
     async def _run_chrome_session(self):
         """Own Chrome's context manager for its entire lifetime."""
         try:
-            config = await asyncio.to_thread(chrome_server_config, self.browser_backend)
+            config = await asyncio.to_thread(chrome_server_config)
             async with silent_stdio_session(config) as session:
                 self.chrome_session = session
-                loaded_tools = await load_mcp_tools(session)
-                if self.browser_backend == "chrome":
-                    # Explicit allowlist: newly added server tools stay unavailable.
-                    loaded_tools = [
-                        tool for tool in loaded_tools
-                        if tool.name == "trigger_extension_action"
-                    ]
-                    if len(loaded_tools) != 1:
-                        raise RuntimeError(
-                            "Chrome MCP must expose trigger_extension_action exactly once. "
-                            "Check that extension tools are enabled."
-                        )
-                self.chrome_tools = loaded_tools
+                self.chrome_tools = await load_mcp_tools(session)
                 self._chrome_ready.set()
                 await self._chrome_stop.wait()
         except BaseException as exc:

@@ -38,7 +38,7 @@ class BrowserLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 await close_chrome_debugger()
 
     async def test_each_job_gets_fresh_session_and_gmail_is_untouched(self):
-        for backend in ('chrome', 'playwright'):
+        for backend in ('chrome', 'playwright'):  # Legacy setting cannot select Playwright MCP.
             with patch.dict(os.environ, {'JOB_AGENT_BROWSER_MCP': backend}):
                 manager = MCPManager()
             events = []
@@ -107,48 +107,30 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, 'startup failed'):
                 await manager.start(['chrome'])
             await manager.stop()
-            self.assertEqual(await manager.start(['chrome']), [extension])
+            self.assertEqual([tool.name for tool in await manager.start(['chrome'])],
+                             ['trigger_extension_action', 'take_heapsnapshot', 'navigate_page'])
             await manager.stop()
         self.assertEqual(attempts, 2)
 
 
-    async def test_missing_allowed_tool_fails_closed(self):
-        with patch.dict(os.environ, {"JOB_AGENT_BROWSER_MCP": "chrome"}):
-            manager = MCPManager()
+    async def test_browser_tools_available_without_extension_tool(self):
+        manager = MCPManager()
+        tools = [SimpleNamespace(name=name) for name in
+                 ('list_pages', 'close_page', 'navigate_page', 'take_snapshot', 'fill_form')]
         @asynccontextmanager
         async def session(config):
             yield object()
-        with patch('mcp_connection.mcp_manager.ensure_chrome_debugger', new_callable=AsyncMock), patch('mcp_connection.mcp_manager.chrome_server_config', return_value={}), patch('mcp_connection.mcp_manager.silent_stdio_session', session), patch('mcp_connection.mcp_manager.load_mcp_tools', new_callable=AsyncMock, return_value=[SimpleNamespace(name="take_heapsnapshot")]):
-            with self.assertRaisesRegex(RuntimeError, "trigger_extension_action"):
-                await manager.start(["chrome"])
-            self.assertEqual(manager.chrome_tools, [])
+        with patch('mcp_connection.mcp_manager._chrome_debugger_is_ready', return_value=True), patch('mcp_connection.mcp_manager.ensure_chrome_debugger', new_callable=AsyncMock), patch('mcp_connection.mcp_manager.chrome_server_config', return_value={}) as config, patch('mcp_connection.mcp_manager.silent_stdio_session', session), patch('mcp_connection.mcp_manager.load_mcp_tools', new_callable=AsyncMock, return_value=tools):
+            self.assertEqual(await manager.start(['chrome']), tools)
+            self.assertEqual(await manager.start(['chrome']), tools)
             await manager.stop()
+        config.assert_called_once_with()
 
-
-class PlaywrightTests(unittest.IsolatedAsyncioTestCase):
-    async def test_playwright_selection_reuses_one_session_and_closes(self):
-        with patch.dict(os.environ, {"JOB_AGENT_BROWSER_MCP": "playwright"}):
-            manager = MCPManager()
-        closed = []
-        @asynccontextmanager
-        async def session(config):
-            yield object()
-            closed.append(True)
-        with patch('mcp_connection.mcp_manager._chrome_debugger_is_ready', return_value=True), patch('mcp_connection.mcp_manager.ensure_chrome_debugger', new_callable=AsyncMock), patch('mcp_connection.mcp_manager.chrome_server_config', return_value={}) as config, patch('mcp_connection.mcp_manager.silent_stdio_session', session), patch('mcp_connection.mcp_manager.load_mcp_tools', new_callable=AsyncMock, return_value=['browser_navigate']):
-            self.assertEqual(await manager.start(['chrome']), ['browser_navigate'])
-            self.assertEqual(await manager.start(['chrome']), ['browser_navigate'])
-            await manager.stop()
-        config.assert_called_once_with('playwright')
-        self.assertEqual(closed, [True])
-
-    def test_invalid_backend_fails_early(self):
-        with patch.dict(os.environ, {"JOB_AGENT_BROWSER_MCP": "typo"}):
-            with self.assertRaisesRegex(ValueError, 'JOB_AGENT_BROWSER_MCP'):
-                MCPManager()
-
-    def test_playwright_prompt_has_tool_schema_guidance(self):
+    def test_prompt_keeps_chrome_instructions_without_restriction(self):
         from prompts import load_prompt
-        with patch.dict(os.environ, {"JOB_AGENT_BROWSER_MCP": "playwright"}):
-            prompt = load_prompt('perform_login/system.txt')
-        self.assertIn('browser_tabs', prompt)
-        self.assertIn('do not pass Chrome pageId', prompt)
+        with patch.dict(os.environ, {'JOB_AGENT_BROWSER_MCP': 'playwright'}):
+            prompt = load_prompt('apply_for_job/system.txt')
+        self.assertIn('close_page', prompt)
+        self.assertIn('take_snapshot', prompt)
+        self.assertNotIn('Chrome tool restriction', prompt)
+        self.assertNotIn('browser_tabs', prompt)
