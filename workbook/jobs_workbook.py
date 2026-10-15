@@ -11,6 +11,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 
 from workbook.job_identity import canonical_job_url, job_identity, job_identity_aliases
+from workbook.storage import with_workbook
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ def _matching_rows_for_job_id(sheet, headers: dict[str, int], job_id: str) -> li
     return matches
 
 
+@with_workbook()
 def get_job_row(path: Path, job_id: str) -> dict[str, str] | None:
     """Return one Applications row by ID without loading the entire sheet.
 
@@ -100,6 +102,7 @@ def _extend_tables(sheet) -> None:
         table.ref = reference
 
 
+@with_workbook()
 def find_job_rows_by_canonical_url(path: Path, url: str) -> list[dict[str, str]]:
     """Return every row matching a normalized URL or job identity without mutating the workbook."""
     raw_url = str(url or "").strip()
@@ -136,6 +139,7 @@ def find_job_rows_by_canonical_url(path: Path, url: str) -> list[dict[str, str]]
 
 
 
+@with_workbook(write=True)
 def update_job_row(path: Path, job_id: str, updates: dict[str, Any]) -> None:
     """Update one job by ID without replacing other workbook sheets."""
     workbook = load_workbook(path)
@@ -166,6 +170,7 @@ def update_job_row(path: Path, job_id: str, updates: dict[str, Any]) -> None:
     workbook.save(path)
 
 
+@with_workbook(write=True)
 def upsert_job_row(
     path: Path,
     record: dict[str, Any],
@@ -251,6 +256,7 @@ def upsert_job_row(
     return action, target_row
 
 
+@with_workbook(write=True)
 def upsert_job_rows(
     path: Path,
     rows: list[dict[str, Any]],
@@ -291,6 +297,7 @@ def upsert_job_rows(
     )
 
 
+@with_workbook(write=True)
 def append_job_rows(path: Path, rows: list[dict[str, Any]]) -> int:
     """Append jobs not already present, preserving dashboard and table styling."""
     if not rows:

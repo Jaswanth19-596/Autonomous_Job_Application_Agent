@@ -7,10 +7,12 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
 from workbook.job_identity import canonical_job_url
+from workbook.storage import with_workbook
 
 PENDING_JOB_COLUMNS = ("url", "fetched_at")
 
 
+@with_workbook()
 def _pending_job_records(path: Path) -> list[dict[str, object]]:
     """Read current pending URLs from the two-column workbook."""
     if not path.is_file():
@@ -57,6 +59,7 @@ def _pending_job_records(path: Path) -> list[dict[str, object]]:
         workbook.close()
 
 
+@with_workbook(write=True)
 def _write_pending_job_records(path: Path, records) -> None:
     """Write the two-column pending-jobs workbook from normalized records."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,6 +77,7 @@ def _write_pending_job_records(path: Path, records) -> None:
     workbook.save(path)
 
 
+@with_workbook(write=True)
 def remove_pending_job_url(path: Path, url: str) -> int:
     """Remove every pending row whose URL matches the supplied job URL."""
     target = canonical_job_url(url)

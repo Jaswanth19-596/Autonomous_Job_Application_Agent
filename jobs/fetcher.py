@@ -1,3 +1,4 @@
+from random import random
 import os
 import sys
 import hashlib
@@ -17,6 +18,7 @@ from workbook.job_identity import (
     canonical_job_url,
     job_identity,
 )
+from workbook.storage import with_workbook
 
 load_dotenv()
 
@@ -98,6 +100,7 @@ def _extract_job_url(job: Mapping[str, Any] | Any) -> str:
     return ""
 
 
+@with_workbook("file_path", write=True)
 def save_jobs_to_excel(jobs: list[dict | str] | list[Any], file_path: Path = EXCEL_PATH) -> pd.DataFrame:
     """
     Appends new job search results to pending_jobs.xlsx with only the columns in pending_jobs.xlsx.
@@ -130,8 +133,7 @@ def save_jobs_to_excel(jobs: list[dict | str] | list[Any], file_path: Path = EXC
                         "fetched_at": fetched_at_str,
                     })
         except Exception as exc:
-            print(f"⚠️  Could not read existing {file_path}, starting fresh: {exc}")
-            existing_records = []
+            raise ValueError(f"Could not read existing {file_path}; refusing to overwrite pending jobs.") from exc
 
     now = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
     new_rows = []
@@ -210,5 +212,14 @@ def search_jobs(keywords, location, under10Applicants: bool = False):
     return results
 
 
+import random
+
 if __name__ == "__main__":
-    search_jobs(keywords="AI Engineer Entry Level", location="United States")
+
+    keywords = ["AI", "Machine Learning", "Data Science", "Software Engineering", "Robotics", "MLOps"]
+    location = "United States"
+
+    keywords = random.choice(keywords)
+    search_jobs(keywords=keywords, location=location)
+    search_jobs(keywords=keywords+" Entry Level", location=location)
+    search_jobs(keywords=keywords+" New Grad", location=location)

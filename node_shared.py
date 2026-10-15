@@ -30,6 +30,7 @@ from utilities import (
     log_tool_calls,
 )
 from utilities.application_answers import create_application_answer_tool
+from utilities.cover_letter import create_cover_letter_tool, create_cover_letter
 from utilities.form_fill import verified_fill
 from utilities.opencode import OPENCODE_USER_AGENT, opencode_session_headers
 from utilities.profile_memory import applicable_profile, load_profile
@@ -103,6 +104,12 @@ async def get_custom_model_with_tools(
         tools.append(create_application_answer_tool(
             application_answer_model, application_answer_source
         ))
+    if "cover_letter" in tool_list:
+        if application_answer_source is None:
+            raise ValueError("Cover-letter tools require workflow source context")
+        tools.append(create_cover_letter_tool(
+            application_answer_model, application_answer_source
+        ))
     return model.bind_tools(tools=tools, extra_headers=headers)
 
 def _with_go_structured_output(schema, config: RunnableConfig | None = None):
@@ -156,6 +163,8 @@ tools_by_name = {
     "store_job_urls": store_job_urls,
     "get_applied_jobs": get_applied_jobs,
     "get_pending_or_invalid_jobs": get_pending_or_invalid_jobs,
+    "create_cover_letter": create_cover_letter,
+    "generate_cover_letter": create_cover_letter,
 }
 
 
@@ -172,6 +181,10 @@ def application_answer_source(state, profile=None):
         "application_answers": scoped_profile.get("application_answers", {}),
         "projects": state.get("projects"),
         "experiences": state.get("experiences", ""),
+        "resume_data": state.get("resume_data", ""),
+        "reference_cover_letter_path": state.get("reference_cover_letter_path", ""),
+        "latex_engine": state.get("latex_engine", "xelatex"),
+        "output_dir": state.get("output_dir"),
     }
 
 
@@ -227,6 +240,10 @@ async def tool_node(state):
 
         if tool_name == "generate_application_answer":
             tool = create_application_answer_tool(
+                application_answer_model, application_answer_source(state)
+            )
+        elif tool_name in {"create_cover_letter", "generate_cover_letter"}:
+            tool = create_cover_letter_tool(
                 application_answer_model, application_answer_source(state)
             )
         else:

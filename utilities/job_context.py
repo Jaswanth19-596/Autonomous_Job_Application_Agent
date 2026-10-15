@@ -7,6 +7,7 @@ from typing import Literal
 
 import pandas as pd
 from langchain_core.tools import tool
+from workbook.storage import workbook_file
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -20,10 +21,10 @@ _MAX_PAGE_SIZE = 50
 def _load_records(source: str) -> list[dict[str, str]]:
     """Load one small context workbook while preserving its workbook fields."""
     path = _WORKBOOKS[source]
-    if not path.exists():
-        raise FileNotFoundError(f"{path.name} does not exist.")
-
-    dataframe = pd.read_excel(path, dtype=str).fillna("")
+    with workbook_file(path) as local:
+        if not local.exists():
+            raise FileNotFoundError(f"{path.name} does not exist.")
+        dataframe = pd.read_excel(local, dtype=str).fillna("")
     records = dataframe.to_dict(orient="records")
     return [{"job_source": source, **record} for record in records]
 

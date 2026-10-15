@@ -11,6 +11,10 @@ wheels/
 
 .env
 user/gmail_token.json
+user/drive_token.json
+user/drive_workbooks.json
+data/.drive-locks/
+data/drive-migration-backups/
 
 # Logs
 logs/
@@ -21,3 +25,6 @@ problems.md
 graphify-out/
 resumes/
 user/
+
+# Unsynced Drive workbooks retained for recovery
+data/.drive-recovery/

@@ -223,7 +223,7 @@ async def submit_job_application(state):
     messages = state['submit_job_application_messages']
 
     model_with_tools = await get_custom_model_with_tools(
-        ["chrome", "gmail", "application_answers"],
+        ["chrome", "gmail", "application_answers", "cover_letter"],
         application_answer_source=application_answer_source(state, profile),
     )
     structured_job_application_model = get_custom_structured_model("job_application_model")
@@ -475,6 +475,7 @@ async def update_job_status(state):
             workbook_path=state.get("applied_jobs_path") or Path(__file__).resolve().parent / "data/applied_jobs.xlsx",
         ),
         "completed_jobs": [state['job_url']],
+        "timed_out_questions": [],
         "application_status": application_status,
         "submit_job_application_messages": Overwrite([]),
         "is_job_valid_messages": Overwrite([]),
@@ -511,7 +512,8 @@ async def human_in_the_loop(state):
     
     user_input = interrupt({
         "prompt": f"{state['human_intervention_prompt']}",
-        "reason": f"{state['human_intervention_reason']}"
+        "reason": f"{state['human_intervention_reason']}",
+        "timeout_seconds": 60,
     })
 
     # Record human intervention in metrics
@@ -521,6 +523,10 @@ async def human_in_the_loop(state):
         record_human_intervention(metrics)
     _metrics_update = {"application_metrics": metrics} if metrics else {}
     
+    if isinstance(user_input, dict) and user_input.get("human_input_timed_out") is True:
+        from utilities.human_input import timeout_update
+        return {**timeout_update(state), **_metrics_update}
+
     if state["human_intervention_origin"] == "submit_job_application":
         profile = load_profile()
         if state.get("human_intervention_reason") == "QUESTION":

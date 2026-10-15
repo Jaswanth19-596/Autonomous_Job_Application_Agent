@@ -41,6 +41,7 @@ from langgraph.types import RetryPolicy
 from langchain_core.exceptions import OutputParserException
 from langchain_openai.chat_models.base import OpenAIRateLimitError
 from workflow_state import MyState
+from workbook.drive import DriveStorageError
 
 graph = StateGraph(MyState)
 
@@ -69,6 +70,8 @@ graph.add_node(understand_user_request_node, retry_policy=retry_policy)
 graph.add_node(human_in_the_loop, retry_policy=retry_policy)
 graph.add_node(dispatch_job, retry_policy=retry_policy)
 graph.add_node(customize_resume, retry_policy=retry_policy)
+
+
 graph.add_edge(START, "initialize_user_data")
 graph.add_edge("initialize_user_data", "collect_user_request")
 graph.add_edge("collect_user_request", "understand_user_request_node")
@@ -139,6 +142,19 @@ graph.add_conditional_edges("human_in_the_loop", lambda state: state["next_step"
 
 
 
+async def invoke_with_drive_recovery(workflow, value, config):
+    while True:
+        try:
+            return await workflow.ainvoke(value, config=config)
+        except DriveStorageError as exc:
+            print(f"\nWorkbook sync paused: {exc}")
+            answer = await asyncio.to_thread(input, "Press Enter to retry the paused step, or type quit: ")
+            if answer.strip().lower() in {"quit", "q", "exit"}:
+                return {}
+            # Resume the failed checkpoint rather than restarting prior actions.
+            value = None
+
+
 async def main():
     """Run the graph from the command line.
 
@@ -162,12 +178,18 @@ async def main():
     }
 
     try:
-        result = await workflow.ainvoke({}, config = config)
+        result = await invoke_with_drive_recovery(workflow, {}, config)
 
         while "__interrupt__" in result:
             interrupt_data = result["__interrupt__"][0].value
-            user_input = input(interrupt_data["prompt"])
-            result = await workflow.ainvoke(Command(resume = user_input), config = config)
+            if interrupt_data.get("timeout_seconds"):
+                from utilities.human_input import timed_human_input
+                user_input = await timed_human_input(
+                    interrupt_data["prompt"], interrupt_data["timeout_seconds"],
+                )
+            else:
+                user_input = input(interrupt_data["prompt"])
+            result = await invoke_with_drive_recovery(workflow, Command(resume=user_input), config)
     finally:
         await shutdown_mcp_tools()
         await conn.close()

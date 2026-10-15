@@ -6,6 +6,7 @@ from langchain_core.tools import tool
 
 from workbook.job_identity import linkedin_job_id
 from workbook.jobs_workbook import find_job_rows_by_canonical_url, update_job_row
+from workbook.storage import workbook_exists
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -48,7 +49,7 @@ def update_job_status(
     URL stored in the workbook. Optional status text records the application
     result, while reason records why a job was not successfully applied to.
     """
-    if not _EXCEL_PATH.exists():
+    if not workbook_exists(_EXCEL_PATH):
         return {"error": "No jobs file found. Run the job fetcher first."}
 
     application_status_value = str(application_status or "").strip()

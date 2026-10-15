@@ -68,6 +68,8 @@ def initialize_user_data(state):
             f"Resume LaTeX template not found: {reference_resume_path}"
         )
 
+    reference_cover_letter_path = project_root / "user/master_cover_letter.tex"
+
     # Excel workbook path
     applied_jobs_path = str(project_root / "data/applied_jobs.xlsx")
     pending_jobs_path = str(project_root / "data/pending_jobs.xlsx")
@@ -84,30 +86,55 @@ def initialize_user_data(state):
         "experiences": experiences,
         "resume_file_path": str(resume_file_path),
         "reference_resume_path": str(reference_resume_path),
+        "reference_cover_letter_path": str(reference_cover_letter_path) if reference_cover_letter_path.is_file() else "",
         "applied_jobs_path": applied_jobs_path,
         "pending_jobs_path": pending_jobs_path,
         "messages": [system_message]
     }
 
+# @trace_node
+# async def collect_user_request(state):
+#     # Logging
+#     node_name = "collect_user_request"
+#     log_node_stage(node_name, "Started — waiting for user input")
+
+#     # Defining model
+#     # Getting the arguments
+#     user_profile, resume, messages = state["user_profile"], state["resume_data"], state["messages"]
+
+#     user_input = interrupt({
+#         "prompt": "What's your problem: ",
+#         }
+#     )
+#     user_message = HumanMessage(content = user_input)
+
+#     return {
+#         "messages": [user_message],
+#     }
+
+
 @trace_node
 async def collect_user_request(state):
-    # Logging
-    node_name = "collect_user_request"
-    log_node_stage(node_name, "Started — waiting for user input")
+    first_request = not any(
+        isinstance(message, HumanMessage)
+        for message in state["messages"]
+    )
 
-    # Defining model
-    # Getting the arguments
-    user_profile, resume, messages = state["user_profile"], state["resume_data"], state["messages"]
+    default = "Apply to up to 10 pending jobs." if first_request else "continue"
 
     user_input = interrupt({
-        "prompt": "What's your problem: ",
-        }
-    )
-    user_message = HumanMessage(content = user_input)
+        "prompt": (
+            f"Your request? After 60 seconds, default: {default}"
+            if first_request else "Your request? "
+        ),
+        "timeout_seconds": 20,
+    })
 
-    return {
-        "messages": [user_message],
-    }
+    if isinstance(user_input, dict):
+        if user_input.get("human_input_timed_out"):
+            user_input = default
+
+    return {"messages": [HumanMessage(content=user_input)]}
 
 
 

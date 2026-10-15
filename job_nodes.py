@@ -28,6 +28,7 @@ from utilities import (
 from workbook.job_identity import canonical_job_id, canonical_job_url
 from workbook.jobs_workbook import find_job_rows_by_canonical_url, upsert_job_rows
 from workbook.pending_jobs import remove_pending_job_url
+from workbook.storage import workbook_exists
 from utilities.jev import use_jev
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
@@ -45,7 +46,7 @@ async def is_job_valid(state):
     applied_jobs_path_str = state.get("applied_jobs_path")
     applied_jobs_path = Path(applied_jobs_path_str) if applied_jobs_path_str else Path(__file__).resolve().parent / "data/applied_jobs.xlsx"
 
-    if job_url and applied_jobs_path.exists():
+    if job_url and workbook_exists(applied_jobs_path):
         existing_rows = find_job_rows_by_canonical_url(applied_jobs_path, job_url)
         if existing_rows:
             log_node_stage(node_name, "Completed — job URL already exists in applied_jobs.xlsx")
@@ -177,6 +178,22 @@ async def _get_page_text_via_chrome(job_url: str) -> str:
             except Exception:
                 return m.group(1)
         return raw
+
+    if "browser_navigate" in by_name:
+        await by_name["browser_navigate"].ainvoke({"url": job_url})
+        result = await by_name["browser_evaluate"].ainvoke(
+            {"function": "() => document.body.innerText"}
+        )
+        raw = _first_text(result)
+        # Playwright wraps the JSON result in a markdown Result section.
+        match = _re.search(r"### Result\s*\n(.*?)(?=\n### |\Z)", raw, _re.DOTALL)
+        if match:
+            import json as _json
+            try:
+                return _json.loads(match.group(1).strip())
+            except ValueError:
+                pass
+        return _unwrap_eval(raw)
 
     # --- 1. find or open a page ----------------------------------------
     page_id = None

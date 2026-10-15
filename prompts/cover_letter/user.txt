@@ -1,0 +1,25 @@
+Return only one complete, compilable LaTeX document. Do not include Markdown fences, explanations, or text before or after the document.
+
+Use this reference template as the source of truth for structure, formatting, preamble, and visual styling. Tailor the content to the target role.
+
+REFERENCE COVER LETTER TEMPLATE
+{reference_cover_letter_tex}
+
+TARGET JOB
+Company: {companyName}
+Title: {title}
+Hiring Manager / Team: {hiring_manager}
+Additional Instructions / Context from Application:
+{additional_context}
+
+Full Job Description:
+{descriptionText}
+
+CANDIDATE RESUME
+{resume_text}
+
+PROJECT BRIEFS
+{projects}
+
+EXPERIENCE BRIEFS
+{experiences}

@@ -104,7 +104,7 @@ def route_after_dispatch(state: dict[str, Any]) -> str:
 
 def route_after_job_status_update(state: dict[str, Any]) -> str:
     """Continue a batch sequentially after persisting the current job's outcome."""
-    destination = "dispatch_job" if state.get("application_queue") else "collect_user_request"
+    destination = "dispatch_job" if state.get("application_queue") else "END"
     log_workflow_event(
         "route update_job_status",
         remaining_jobs=len(state.get("application_queue", [])),

@@ -7,6 +7,7 @@ from langchain_core.tools import tool
 
 from workbook.job_identity import canonical_job_id
 from workbook.jobs_workbook import get_job_row
+from workbook.storage import workbook_exists, workbook_file
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +46,7 @@ def get_applied_jobs(
     include_description_snippet: bool = False,
 ) -> dict:
     """Fetch and search jobs from data/applied_jobs.xlsx with filtering and pagination."""
-    if not _EXCEL_PATH.exists():
+    if not workbook_exists(_EXCEL_PATH):
         return {"error": "No jobs file found. Run the job fetcher first."}
 
     target_id = str(job_id or "").strip()
@@ -66,7 +67,8 @@ def get_applied_jobs(
         return {"total_matching": 1, "jobs": [record]}
 
     try:
-        dataframe = pd.read_excel(_EXCEL_PATH, dtype=str)
+        with workbook_file(_EXCEL_PATH) as local:
+            dataframe = pd.read_excel(local, dtype=str)
     except Exception as exc:
         return {"error": f"Could not read file: {exc}"}
 

@@ -1,1 +1,1 @@
-"""Local workbook and candidate-profile access helpers."""
+"""Local and Google Drive workbook access and candidate-profile helpers."""

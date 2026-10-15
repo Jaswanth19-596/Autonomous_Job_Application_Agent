@@ -42,6 +42,9 @@ class MyState(MessagesState):
     projects: str = ""
     experiences: str = ""
     reference_resume_path: str = ""
+    cover_letter_path: str = ""
+    cover_letter: str = ""
+    reference_cover_letter_path: str = ""
     
     pending_jobs_path: str = ""
     applied_jobs_path: str = ""
@@ -52,6 +55,8 @@ class MyState(MessagesState):
     application_messages: list[dict] = []
     tool_call_origin: str = ""
     next_step: str = ""
+
+    timed_out_questions: list[str] = []
 
     # Human Review fields
     requires_human: bool = False

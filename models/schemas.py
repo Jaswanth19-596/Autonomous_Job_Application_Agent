@@ -4,6 +4,8 @@ from typing import Literal, Union, Annotated, Optional
 from pydantic import BaseModel, Field
 from models.sub_schemas import ChatWithUserSubModel, ApplyForJobsSubModel, InvalidJobSubModel, ValidJobSubModel, ApplicationAppliedSubModel, ApplicationRequiresLoginSubModel, ApplicationRequiresHumanSubModel, ApplicationUrlReadySubModel, ApplicationUrlResolutionIssueSubModel, ApplicationUrlLoginSubModel, ApplicationSkipSubModel
 
+ApplicationNotAppliedSubModel = ApplicationRequiresHumanSubModel
+
 UserRequestAction = Annotated[
     Union[
         ChatWithUserSubModel,

@@ -6,10 +6,18 @@ from openpyxl import Workbook, load_workbook
 
 from workbook.job_identity import canonical_job_id, canonical_job_url
 from workbook.pending_jobs import remove_pending_job_url
+from workbook.storage import with_workbook
 
 
 def move_failed_job(pending_path: Path, invalid_path: Path, url: str, reason: str) -> None:
     """Upsert a failure by listing URL; retries safely finish pending removal."""
+    _save_failed_job(invalid_path, url, reason)
+    # Finish the Drive upload before removing anything from the pending queue.
+    remove_pending_job_url(pending_path, url)
+
+
+@with_workbook("invalid_path", write=True)
+def _save_failed_job(invalid_path: Path, url: str, reason: str) -> None:
     canonical = canonical_job_url(url)
     if not canonical:
         raise ValueError("Cannot record a rejected job without a valid job URL.")
@@ -36,5 +44,3 @@ def move_failed_job(pending_path: Path, invalid_path: Path, url: str, reason: st
         book.save(invalid_path)
     finally:
         book.close()
-
-    remove_pending_job_url(pending_path, url)

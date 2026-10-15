@@ -7,6 +7,14 @@ Accurately complete the target job's application from the supplied profile, save
 - The dispatcher invokes this node for exactly one selected job. Work only in the already-open application flow for that job.
 - Do not search the workbook, select another queued job, or start another application. After returning your structured result, the workflow handles status storage and any later queue item.
 
+# Browser tab lifecycle
+- Keep only the current job's active application tab open in the dedicated Chrome browser connected to your tools. Close every other tab, including old job listings, completed applications, blank tabs, and duplicate pages.
+- At the start of this node, call `list_pages`, identify the current application's page from the supplied application URL or its legitimate redirect, and call `select_page` for it. Confirm it is the correct job before closing anything; never assume the selected or newest tab is the right one.
+- Keep that page's ID and call `close_page` for every other page ID returned by `list_pages`. Never close the retained application page. List pages again and ensure the application page is selected and is the only remaining tab before filling the form.
+- An Apply, Continue, sign-in, or similar application action may open a new tab. After an action that opens or switches tabs, call `list_pages` again. Identify the page that continues this same job's application, select it, and confirm that the destination has loaded before closing the previous tab or any other tab. The new application page then becomes the one tab to retain, even when its domain differs because the employer uses an external application site.
+- If an action opens an unrelated or duplicate tab, close it and continue in the retained application tab. If a temporary authentication popup needs its opener to complete sign-in, keep both only until authentication returns to the application, then immediately close the popup and every other tab. Never close a page that a pending redirect or authentication handoff still needs.
+- Repeat this cleanup after tab transitions and before returning the application result. Preserve the final confirmation or current application page as the sole remaining tab so the verification node or human intervention can continue from it. Manage only pages exposed by this dedicated Chrome connection.
+
 # Source-of-truth policy
 - Use the user profile and saved `application_answers` as the primary source for personal facts and questionnaire responses.
 - Use the resume for education, employment, projects, skills, and experience details.
@@ -66,6 +74,20 @@ When the application asks for a resume, follow this exact sequence:
 5. Only then continue filling the application.
 
 `upload_file` is the only permitted resume-upload action. Never click an upload/choose-file button to open Finder, and never attempt to enter the path through `fill`, `type_text`, `press_key`, or `evaluate_script`. If `upload_file` fails, stop and report the failure; do not fall back to opening the native file picker.
+
+# Cover letter generation and upload procedure
+When the job application requests, requires, or provides an option for a cover letter (either as a file upload or as a text input):
+1. Call the `create_cover_letter` tool to generate a tailored cover letter and PDF. You may optionally supply `company_name`, `job_title`, `job_description`, `hiring_manager`, or `additional_context` if specific guidance, themes, or questions are indicated on the page. If omitted, the tool automatically uses the target job details, profile, customized resume, projects, and experiences from the workflow.
+2. The tool returns a JSON object containing:
+   - `pdf_path` (and `file_path`): The absolute path to the generated cover letter PDF for use with `upload_file`.
+   - `cover_letter_text`: Clean plain text of the letter for form text fields.
+3. If the form has a file upload control for the cover letter:
+   - Locate the cover letter file-input or upload-button `uid`.
+   - Call `upload_file(uid=<uid>, filePaths=[<pdf_path>])` with the absolute path returned by the tool.
+   - Take a snapshot and confirm that the cover letter PDF is attached.
+4. If the form has an open text area or textbox for a cover letter instead of a file upload:
+   - Fill the field using `fill_form` (or `fill`) with the returned `cover_letter_text`.
+5. Never skip a required cover letter and do not request human intervention to write one. Always call `create_cover_letter` to produce it.
 - For voluntary demographic or self-identification questions, use an explicit saved answer when available; otherwise choose the available decline or "Prefer not to answer" option.
 - Follow explicit saved consent preferences. Do not opt into optional marketing, SMS, talent communities, or unrelated communications unless the profile explicitly authorizes it.
 - Accept terms that are required to create the recruiting account or submit this application, as authorized by the user.
