@@ -50,7 +50,6 @@ class ApplicationUrlLoginSubModel(BaseModel):
 class ApplicationAppliedSubModel(BaseModel):
     action: Literal["APPLICATION_APPLIED"] = "APPLICATION_APPLIED"
     is_applied: Literal[True] = True
-    final_status_message: str = Field(description="The final status message to be shown to the user.")
     url_applied_on: str = Field(description = "URL of the page that shows job application submitted, used by other agent to verify. ")
 
 class ApplicationRequiresLoginSubModel(BaseModel):

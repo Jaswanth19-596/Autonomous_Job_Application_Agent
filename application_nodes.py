@@ -285,7 +285,6 @@ async def submit_job_application(state):
             "job_application_phase": "APPLIED",
             "is_applied": True,
             "url_applied_on": application_result.url_applied_on,
-            "final_status_message": application_result.final_status_message,
             "requires_human": False,
             "human_intervention_reason": None,
             "human_intervention_prompt": "",
@@ -323,13 +322,15 @@ async def submit_job_application(state):
     if application_result.action == "SKIP_JOB":
         return {
             "job_application_phase": "NOT_APPLIED",
-            "final_status_message": application_result.reason,
+            "reason_for_not_applying": application_result.reason,
+            "application_status": "Not Applied",
             "is_applied": False,
             "submit_job_application_messages": [response],
         }
     return {
         "job_application_phase": "NOT_APPLIED",
-        "final_status_message": application_result.reason,
+        "application_status": "Not Applied",
+        "reason_for_not_applying": application_result.reason,
         "is_applied": False,
         "submit_job_application_messages": [response],
     }
@@ -389,16 +390,16 @@ async def verify_job_status(state):
     return {
         "verification_phase": (
             "APPLIED"
-            if structured_response.application_status == "Applied"
+            if structured_response.verified_application_status == "Applied"
             else "NOT_APPLIED"
         ),
-        "application_status": structured_response.application_status,
-        "is_applied": structured_response.application_status == "Applied",
-        "final_status_message": structured_response.message,
+        "application_status": structured_response.verified_application_status,
+        "is_applied": structured_response.verified_application_status == "Applied",
+        "reason_for_not_applying": structured_response.message,
         "verify_job_status_messages": [response, structured_response.message],
         "messages": [{
             'role': 'user',
-            "content": f"""The job {state.get('job_details',{}).get('title')}{state.get("job_url")} has been {structured_response.application_status}. 
+            "content": f"""The job {state.get('job_details',{}).get('title')}{state.get("job_url")} has been {structured_response.verified_application_status}. 
             And the status message is {structured_response.message}
             """
         }]
@@ -423,7 +424,7 @@ async def update_job_status(state):
         # Identify this listing directly from the URL selected by dispatch_job.
         move_failed_job(
             pending_path, invalid_path, state.get("job_url"),
-            state.get("final_status_message", ""),
+            state.get("reason_for_not_applying"),
         )
         log_node_stage(node_name, "Completed — rejected job moved from pending to invalid")
         return {
@@ -433,25 +434,18 @@ async def update_job_status(state):
         }
 
     # If the job is valid, but applying is unsuccessful
-    job_details = state.get("job_details") or {}
+    job_details = state.get("job_details")
     job_id = job_details.get("id")
     if not job_id:
         raise ValueError("Cannot update job status because the job has no stable ID.")
 
-    verified_status = state.get("application_status", "").strip()
-    if verified_status:
-        application_status = verified_status
-    elif state.get("is_applied"):
-        application_status = "Applied"
-    else:
-        application_status = "Not Applied"
+    application_status = state.get("application_status")
 
-    final_status_message = state.get("final_status_message", "")
+    reason_for_not_applying = state.get("reason_for_not_applying")
     tool_args = {
         "job_id": job_id,
         "application_status": application_status,
-        "status": final_status_message,
-        "reason": final_status_message if application_status != "Applied" else "",
+        "reason": reason_for_not_applying,
     }
     log_tool_calls(node_name, [{"name": update_job_status_tool.name, "args": tool_args}])
     tool_result = await await_with_progress(
@@ -466,7 +460,7 @@ async def update_job_status(state):
         raise RuntimeError(tool_result["error"])
 
     if application_status != "Applied":
-        move_failed_job(pending_path, invalid_path, state.get("job_url"), final_status_message)
+        move_failed_job(pending_path, invalid_path, state.get("job_url"), reason_for_not_applying)
 
     log_node_stage(node_name, "Completed — job status updated")
     return {
@@ -494,7 +488,6 @@ async def update_job_status(state):
         "is_job_valid_messages": Overwrite([]),
         "resolve_application_url_messages": Overwrite([]),
         "perform_login_messages": Overwrite([]),
-        
         "verify_job_status_messages": Overwrite([]),
     }
 
@@ -508,7 +501,7 @@ async def human_in_the_loop(state):
     """
     # Logging
     node_name = "human_in_the_loop"
-    log_node_stage(node_name, "Started — human intervention required")
+    log_node_stage(node_name, "Started — human intervention")
     
     user_input = interrupt({
         "prompt": f"{state['human_intervention_prompt']}",
@@ -538,12 +531,10 @@ async def human_in_the_loop(state):
         return {
             "user_profile": profile,
             "application_recovery_attempts": 0,
-            "next_step": state['human_intervention_origin'],
             "submit_job_application_messages": [HumanMessage(content=user_input)],
             "requires_human": False,
             "human_intervention_reason": "",
             "human_intervention_prompt": "",
-            "human_intervention_origin": "",
             **_metrics_update,
         }
 
@@ -552,24 +543,20 @@ async def human_in_the_loop(state):
         skip_keywords = ["next", "skip", "continue", "move on", "pass", "cancel"]
         if any(kw in lower_input for kw in skip_keywords):
             return {
-                "next_step": "update_job_status",
                 "login_phase": "FAILED",
-                "final_status_message": "Login failed",
+                "reason_for_not_applying": "Login failed",
                 "application_status": "Not Applied",
                 "requires_human": False,
                 "human_intervention_reason": "",
                 "human_intervention_prompt": "",
-                "human_intervention_origin": "",
                 "perform_login_messages": Overwrite([]),
                 **_metrics_update,
             }
         return {
-            "next_step": state['human_intervention_origin'],
             "perform_login_messages": [HumanMessage(content=user_input)],
             "requires_human": False,
             "human_intervention_reason": "",
             "human_intervention_prompt": "",
-            "human_intervention_origin": "",
             **_metrics_update,
         }
     
@@ -593,33 +580,26 @@ async def human_in_the_loop(state):
             else:
                 status = state.get("application_status") or "Not Applied"
             return {
-                "next_step": "update_job_status",
                 "application_status": status,
                 "is_applied": status == "Applied",
-                "final_status_message": f"User requested {status}: {user_input}",
                 "requires_human": False,
                 "human_intervention_reason": "",
                 "human_intervention_prompt": "",
-                "human_intervention_origin": "",
                 "resolve_application_url_messages": Overwrite([]),
                 **_metrics_update,
             }
         return {
-            "next_step": state['human_intervention_origin'],
             "resolve_application_url_messages": [HumanMessage(content=user_input)],
             "requires_human": False,
             "human_intervention_reason": "",
             "human_intervention_prompt": "",
-            "human_intervention_origin": "",
             **_metrics_update,
         }
 
     else:
         return {
-            "next_step": state['human_intervention_origin'],
             "requires_human": False,
             "human_intervention_reason": "",
             "human_intervention_prompt": "",
-            "human_intervention_origin": "",
             **_metrics_update,
         }

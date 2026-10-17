@@ -137,7 +137,7 @@ graph.add_conditional_edges(
     },
 )
 
-graph.add_conditional_edges("human_in_the_loop", lambda state: state["next_step"], {
+graph.add_conditional_edges("human_in_the_loop", lambda state: state.get("human_intervention_origin") or "update_job_status", {
     "submit_job_application": "submit_job_application",
     "resolve_application_url": "resolve_application_url",
     "perform_login": "perform_login",

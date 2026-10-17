@@ -51,10 +51,9 @@ class MyState(MessagesState):
     is_valid: bool = False
     actual_job_url: str = ""
     is_authenticated: bool = False
-    application_status: str = ""
+    application_status: Literal["Applied", "Not Applied"] = "Not Applied"
     application_messages: list[dict] = []
     tool_call_origin: str = ""
-    next_step: str = ""
 
     timed_out_questions: list[str] = []
 
@@ -84,4 +83,4 @@ class MyState(MessagesState):
 
     is_applied: bool = False
     url_applied_on: str = ""
-    final_status_message: str = ""
+    reason_for_not_applying: str = ""

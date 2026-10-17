@@ -13,7 +13,7 @@ If the human is also not able to do anything, use `SKIP_JOB` action with `reason
 
 ## `APPLICATION_APPLIED`
 - Use only when browsing evidence proves that the application was successfully submitted.
-- Return `action = "APPLICATION_APPLIED"`, `is_applied = true`, `final_status_message`, and `url_applied_on`.
+- Return `action = "APPLICATION_APPLIED"`, `is_applied = true`, `reason_for_not_applying`, and `url_applied_on`.
 - `url_applied_on` must be the confirmation page or final submitted page.
 - Do not return login or human-intervention fields.
 

@@ -71,22 +71,20 @@ def route_after_resolving_url(state: dict[str, Any]) -> str:
 
 def route_after_login(state: dict[str, Any]) -> str:
     """Return a completed login to the node that encountered its gate, or update job status on failure."""
-    if state.get("next_step") == "update_job_status":
-        destination = "update_job_status"
+    
+    phase = state["login_phase"]
+    if phase == "NEEDS_TOOLS":
+        destination = "tool_node"
+    elif phase == "SUCCESS":
+        destination = state.get("login_return_node")
+        if destination not in {"resolve_application_url", "submit_job_application"}:
+            raise ValueError(f"Unsupported login return node: {destination}")
+    elif phase == "REQUIRES_HUMAN":
+        destination = "human_in_the_loop"
+    elif phase == "FAILED":
+        destination = "human_in_the_loop" if state.get("requires_human") else "update_job_status"
     else:
-        phase = state["login_phase"]
-        if phase == "NEEDS_TOOLS":
-            destination = "tool_node"
-        elif phase == "SUCCESS":
-            destination = state.get("login_return_node")
-            if destination not in {"resolve_application_url", "submit_job_application"}:
-                raise ValueError(f"Unsupported login return node: {destination}")
-        elif phase == "REQUIRES_HUMAN":
-            destination = "human_in_the_loop"
-        elif phase == "FAILED":
-            destination = "human_in_the_loop" if state.get("requires_human") else "update_job_status"
-        else:
-            raise ValueError(f"Unsupported login phase: {phase}")
+        raise ValueError(f"Unsupported login phase: {phase}")
     log_workflow_event("route perform_login", phase=state.get("login_phase"), destination=destination)
     return destination
 

@@ -17,10 +17,7 @@ This is the current dispatched job only. Do not search the workbook, inspect ano
 
 # Status rules
 - Use `Applied` when the chosen source explicitly confirms submission: either a matching company/ATS confirmation email, or the application page after Gmail did not find such an email.
-- Use `Failed` when the page explicitly shows a failed submission or unrecoverable application error.
-- Use `Needs CAPTCHA` when a CAPTCHA prevents completion or confirmation.
-- Use `In Progress` when the application remains incomplete or confirmation cannot yet be determined.
-- Use `Not Applied` only when the page explicitly establishes that no application was submitted.
+- Use `Not Applied` when the application remains incomplete or confirmation cannot yet be determined, when the page explicitly establishes that no application was submitted.
 
 # Browser dialog and alert handling
 - Webpages may trigger native JavaScript alerts, confirmations, or prompts (`window.alert`, `window.confirm`, `window.prompt`). These native dialogs do NOT appear in HTML DOM snapshots (`take_snapshot`) and freeze page execution until dismissed.

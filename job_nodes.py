@@ -52,13 +52,12 @@ async def is_job_valid(state):
             log_node_stage(node_name, "Completed — job URL already exists in applied_jobs.xlsx")
             return {
                 "validation_phase": "NOT_ELIGIBLE",
-                "final_status_message": "Job URL already exists in applied_jobs.xlsx",
+                "reason_for_not_applying": "Job URL already exists in applied_jobs.xlsx",
                 "is_applied": False,
             }
 
     # Defining model with tools
     model_with_tools = await get_custom_model_with_tools(["chrome"])
-    structured_model = get_custom_structured_model("job_validation_model")
 
     messages = state["is_job_valid_messages"]
 
@@ -132,8 +131,9 @@ async def is_job_valid(state):
             
     return {
         "validation_phase": jev_output['valid_job']['choice'],
-        "final_status_message": jev_output['invalid_job_reason']['choice'],
+        "reason_for_not_applying": jev_output['invalid_job_reason']['choice'],
         "is_applied": False,
+        "application_status": "Not Applied"
     }
 
 

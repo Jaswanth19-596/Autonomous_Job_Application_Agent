@@ -29,6 +29,11 @@
   "preferred_locations": "Flexible within the United States",
   "restricted_by_current_or_former_employer": false,
   "application_answers": {
+    "Describe the most interesting thing you’ve built with an LLM. What does it do, and why did you build it? What was the hardest part to get working? How did you know it was working? Add a link (repo, paper, or demo) if you have one.": {
+      "question": "Describe the most interesting thing you’ve built with an LLM. What does it do, and why did you build it? What was the hardest part to get working? How did you know it was working? Add a link (repo, paper, or demo) if you have one.",
+      "answer": "The most interesting project I’ve built is an autonomous AI Job Application Agent using LangGraph, LLMs, and Model Context Protocol (MCP). I built it to automate the repetitive job application process so I could spend more time preparing for interviews and improving my skills. The agent discovers relevant jobs, evaluates them against my profile, navigates application portals using Playwright, fills out forms, answers screening questions, submits applications, and tracks their status. It also integrates with Telegram for real-time monitoring and control. The hardest part was making browser automation reliable across different application portals, especially handling dynamic elements, unexpected forms, and preventing agents from getting stuck in repetitive tool-calling loops. I addressed this through better state management, context trimming, validation, and recovery mechanisms. I validated it by running the agent on real job applications and verifying successful submissions, accurate form responses, and application tracking. I also built automated tests for the agent's core control workflows. The result is a working multi-agent system that handles real-world workflows with minimal human intervention.",
+      "updated_at": "2026-08-14T17:23:17.563800+00:00"
+    },
     "if you receive a job offer, are you willing to submit to a background check?": {
       "question": "If you receive a job offer, are you willing to submit to a background check?",
       "answer": "yes",
@@ -622,6 +627,54 @@
       "context": "https://jobright.ai/jobs/info/6ab1ea78d2a93d5a97ebd316",
       "source": "user",
       "updated_at": "2026-09-29T06:22:43.433986+00:00"
+    },
+    "8a639e5b8b63d805c710d2a620248641356ade6124121075398b9070d3c96935": {
+      "question": "Are you open to travel for this GenAI Engineer role? Please answer Yes or No.",
+      "answer": "Yes",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6abb2131be5f1e9325119bac",
+      "source": "user",
+      "updated_at": "2026-09-29T09:45:05.276527+00:00"
+    },
+    "242d7bf437149bd93930b737eaef71330d2d10cc23eddb48a9d7e75a476a9697": {
+      "question": "What is your prior tennis experience? Options: Never played before, Played or watched tennis in the past, Play casually and/or familiar with tennis scoring & terminology, Play weekly and/or competitively.",
+      "answer": "I've applied for the role, move to next one.",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6abb0da41acb8fc6f09c2b04",
+      "source": "user",
+      "updated_at": "2026-09-29T09:54:52.292065+00:00"
+    },
+    "a30207b8dd3a4d469186a545a1a637b99edebabf8fbf6b218cc937a091056eee": {
+      "question": "Are you related to anyone who has worked at EXL or currently works at EXL? Please answer Yes or No.",
+      "answer": "No",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6abab6091acb8fc6f09c11c5",
+      "source": "user",
+      "updated_at": "2026-09-29T10:13:48.125688+00:00"
+    },
+    "8e408c328749d36bb1a3bfade7bb6fc1c0c6515db3a810727410deb59bd0d96b": {
+      "question": "How many years of work experience should I enter for Microsoft Azure?",
+      "answer": "I've applied for that job, move to the next one",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6aba4b50d2914e9273eeae71",
+      "source": "user",
+      "updated_at": "2026-09-29T10:32:37.197528+00:00"
+    },
+    "89bb759ba40e8b45da6bd11b04cb404cd1f2f2839f043da45ea904f5bc13d49a": {
+      "question": "What value should be entered for required Address Line 2?",
+      "answer": "Apt 1A",
+      "scope": "job",
+      "context": "https://jobright.ai/jobs/info/6abdeca48ff3fb9b3bc725ee",
+      "source": "user",
+      "updated_at": "2026-10-01T06:36:24.140168+00:00"
+    },
+    "cd262bd2a3b3aa188dd5dd2441393695ba162e1db45b52a7bc94a551b9ef0267": {
+      "question": "In how many months from now will you need work visa sponsorship (for example when OPT or STEM OPT ends)? Enter 0 if now, 99 if never.",
+      "answer": "2223",
+      "scope": "job",
+      "context": "https://confersolutions.ai/careers/ai-engineer",
+      "source": "user",
+      "updated_at": "2026-10-10T11:01:25.501595+00:00"
     }
   }
 }

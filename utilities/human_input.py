@@ -53,13 +53,12 @@ def timeout_update(state):
         "requires_human": False,
         "human_intervention_reason": "",
         "human_intervention_prompt": "",
-        "human_intervention_origin": "",
     }
     if (state.get("human_intervention_reason") == "QUESTION"
             and origin in {"submit_job_application", "perform_login", "resolve_application_url"}
             and key not in attempted):
         result.update({
-            "next_step": origin,
+            "human_intervention_origin": origin,
             "timed_out_questions": [*attempted, key],
             f"{origin}_messages": [{"role": "user", "content": (
                 f"No human response arrived within 60 seconds for: {question}\n"
@@ -74,9 +73,9 @@ def timeout_update(state):
     else:
         applied = state.get("is_applied") or state.get("job_application_phase") == "APPLIED"
         result.update({
-            "next_step": "update_job_status",
+            "human_intervention_origin": "update_job_status",
             "application_status": "Applied" if applied else "Not Applied",
             "is_applied": bool(applied),
-            "final_status_message": f"Human input timed out after 60 seconds; moving to next job. {question}",
+            "reason_for_not_applying": f"Human input timed out after 60 seconds; moving to next job. {question}",
         })
     return result
