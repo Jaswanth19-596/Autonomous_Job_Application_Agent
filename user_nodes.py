@@ -28,9 +28,9 @@ def initialize_user_data(state):
     LangGraph Studio without requiring external input.
     """
     node_name = "initialize_user_data"
-    log_node_stage(node_name, "Started — loading user data")
-
     project_root = Path(__file__).resolve().parent
+
+    logger.info("INITIALIZE_USER_DATA.entered")
 
     # Load user profile
     with (project_root / "user/user_profile.json").open(encoding="utf-8") as f:
@@ -77,7 +77,17 @@ def initialize_user_data(state):
     # System prompt for the chat node
     system_message = SystemMessage(content = load_prompt("chat_with_user/system.txt"))
 
-    log_node_stage(node_name, "Completed — user data loaded")
+
+    logger.debug(f"The profile data: {user_profile}")
+    logger.debug(f"The resume data: {resume_data}")
+    logger.debug(f"The projects data: {projects}")
+    logger.debug(f"The experiences data: {experiences}")
+    logger.debug(f"The resume file path: {resume_file_path}")
+    logger.debug(f"The reference resume path: {reference_resume_path}")
+    logger.debug(f"The reference cover letter path: {reference_cover_letter_path}")
+    logger.debug(f"The applied jobs path: {applied_jobs_path}")
+    logger.debug(f"The pending jobs path: {pending_jobs_path}")
+    logger.info("INITIALIZE_USER_DATA.completed")
 
     return {
         "user_profile": user_profile,
@@ -92,35 +102,18 @@ def initialize_user_data(state):
         "messages": [system_message]
     }
 
-# @trace_node
-# async def collect_user_request(state):
-#     # Logging
-#     node_name = "collect_user_request"
-#     log_node_stage(node_name, "Started — waiting for user input")
-
-#     # Defining model
-#     # Getting the arguments
-#     user_profile, resume, messages = state["user_profile"], state["resume_data"], state["messages"]
-
-#     user_input = interrupt({
-#         "prompt": "What's your problem: ",
-#         }
-#     )
-#     user_message = HumanMessage(content = user_input)
-
-#     return {
-#         "messages": [user_message],
-#     }
-
-
 @trace_node
 async def collect_user_request(state):
+    node_name = "collect_user_request"
+    logger.info("COLLECT_USER_REQUEST.entered")
+
     first_request = not any(
         isinstance(message, HumanMessage)
         for message in state["messages"]
     )
 
     default = "Apply to up to 10 pending jobs." if first_request else "continue"
+    logger.debug(f"COLLECT_USER_REQUEST.default_prompt", extra={"default_prompt": default, "first_request": first_request})
 
     user_input = interrupt({
         "prompt": (
@@ -132,7 +125,10 @@ async def collect_user_request(state):
 
     if isinstance(user_input, dict):
         if user_input.get("human_input_timed_out"):
+            logger.warning(f"COLLECT_USER_REQUEST.human_input_timed_out, using default prompt", extra={"default_prompt": default})
             user_input = default
+
+    logger.info(f"COLLECT_USER_REQUEST.user_input", extra={"user_input": user_input})
 
     return {"messages": [HumanMessage(content=user_input)]}
 
@@ -142,13 +138,20 @@ async def collect_user_request(state):
 async def understand_user_request_node(state):
     # Logging
     node_name = "understand_user_request_node"
-    log_node_stage(node_name, "Started — agent is thinking")
+    logger.info("UNDERSTAND_USER_REQUEST_NODE.entered")
 
     # Defining model
     model_with_tools = await get_custom_model_with_tools(["custom"])
+    logger.debug("UNDERSTAND_USER_REQUEST_NODE.models_loaded")
 
     # Getting the arguments
     messages = state["messages"]
+
+    if messages is None or len(messages) == 0:
+        logger.error("UNDERSTAND_USER_REQUEST_NODE.no_messages", extra={"messages": messages})
+        raise ValueError("No messages found in the state")
+
+    logger.debug("UNDERSTAND_USER_REQUEST_NODE.messages_loaded", extra={"messages": messages})
 
     response = await await_with_progress(
         node_name,
@@ -157,28 +160,28 @@ async def understand_user_request_node(state):
     )
 
     if response.tool_calls:
-        log_workflow_event(
-            "Model requested tools",
-            destination="tool_node",
-            tool_count=len(response.tool_calls),
-        )
+        logger.debug("UNDERSTAND_USER_REQUEST_NODE.tools_requested", extra={
+            "user_node_decision": "NEEDS_TOOLS",
+            "tool_call_origin": "understand_user_request_node",
+            "messages": [response]
+        })
         return {
             "user_node_decision": "NEEDS_TOOLS",
             "tool_call_origin": "understand_user_request_node",
             "messages": [response]
         }
 
-    log_node_stage(node_name, "Agent response complete — Choosing the next step")
-
     response_text = visible_response_text(response.content)
     if response_text:
         print(response_text)
+        logger.debug("UNDERSTAND_USER_REQUEST_NODE.response_text", extra={"response_text": response_text})
 
     queue = state.get("application_queue", [])
+    logger.debug("UNDERSTAND_USER_REQUEST_NODE.queue_loaded", extra={"queue": queue})
 
     while(True):
-
         try:
+            logger.debug("UNDERSTAND_USER_REQUEST_NODE.invoking_jev_for_decision", extra={"user_message" : messages[-1].content})
             jev_response = await await_with_progress(
                 node_name,
                 "Jev is Thinking",
@@ -211,20 +214,24 @@ async def understand_user_request_node(state):
                 ),
             )
             action = jev_response["action"]["choice"]
+            logger.debug("UNDERSTAND_USER_REQUEST_NODE.jev_decision", extra={"decision" : action})
             if action not in {"CHAT", "APPLY_FOR_JOBS"}:
+                logger.error("UNDERSTAND_USER_REQUEST_NODE.unexpected_jev_decision", extra={"decision" : action})
                 raise ValueError("Unexpected Jev routing decision")
             break
         except JevTokenLimitExceededException as e:
-            logger.exception("The token limit exceeded, Compacting the messages")
+            logger.warning("UNDERSTAND_USER_REQUEST_NODE.jev_token_limit_exceeded", extra={"error": str(e)})
 
             trimmed_messages = []
             for i in range(2,-4):
+                logger.debug("UNDERSTAND_USER_REQUEST_NODE.trimmmed_messages", extra={"message_index" : i, "trimmed_message" : messages[i]})
                 trimmed_messages.append(messages[i])
 
             messages = trimmed_messages
+            logger.debug("UNDERSTAND_USER_REQUEST_NODE.messages_updated", extra={"messages": messages})
         
         except Exception as e:
-            logger.exception("Jev routing failed; keeping stored URLs without starting applications")
+            logger.exception("UNDERSTAND_USER_REQUEST_NODE.jev_routing_failed", extra={"error": str(e)})
             action = "CHAT"
         
     return {
@@ -235,9 +242,14 @@ async def understand_user_request_node(state):
 
 @trace_node
 async def dispatch_job(state):
+    node_name = "dispatch_job"
+    logger.info("DISPATCH_JOB.entered")
+
     application_queue = state.get("application_queue", [])
+    logger.debug("DISPATCH_JOB.queue_loaded", extra={"queue_length": len(application_queue)})
+
     if not application_queue:
-        log_workflow_event("application queue exhausted", destination="collect_user_request")
+        logger.warning("DISPATCH_JOB.no_jobs_in_queue")
         return {
             "current_job": None,
             "has_next_job": False,
@@ -250,12 +262,6 @@ async def dispatch_job(state):
     job_url = application_queue[0]
     remaining_application_queue = application_queue[1:]
     
-    log_workflow_event(
-        "selected queued job for validation",
-        job_url = job_url,
-        remaining_jobs=len(remaining_application_queue),
-    )
-
     return {
         **timing,
         "job_url": job_url,

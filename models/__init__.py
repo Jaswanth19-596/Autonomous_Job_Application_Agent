@@ -7,7 +7,7 @@ from .schemas import (
     ValidJobOrNotDecision,
     UserRequestDecision,
     ApplicationResult,
-    ApplicationVerificationResult,
+    ApplicationVerificationDecision
 )
 
 __all__ = [
@@ -17,5 +17,5 @@ __all__ = [
     "ValidJobOrNotDecision",
     "UserRequestDecision",
     "ApplicationResult",
-    "ApplicationVerificationResult",
+    "ApplicationVerificationDecision"
 ]

@@ -31,8 +31,122 @@ console = Console(highlight=False)
 
 LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 NODE_STATE_LOG_FILE_PATH = LOGS_DIR / "node_states.log"
+APP_LOG_FILE_PATH = LOGS_DIR / "app.log"
 
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+class ExtraFormatter(logging.Formatter):
+    """Custom formatter that automatically appends any extra attributes passed to log records."""
+
+    _STANDARD_ATTRS = {
+        "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
+        "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
+        "created", "msecs", "relativeCreated", "thread", "threadName",
+        "processName", "process", "message", "asctime", "taskName",
+    }
+
+    def format(self, record: logging.LogRecord) -> str:
+        formatted = super().format(record)
+        extras = {
+            k: v
+            for k, v in record.__dict__.items()
+            if k not in self._STANDARD_ATTRS and not k.startswith("_")
+        }
+        if extras:
+            return f"{formatted} | {extras}"
+        return formatted
+
+
+class AppLogFilter(logging.Filter):
+    """Filter ensuring only logs originating from the application's own codebase reach app.log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Ignore dedicated loggers that write to separate files
+        if record.name in {"node_state_file_logger", "llm_calls_file_logger"}:
+            return False
+
+        pathname = getattr(record, "pathname", "")
+        if pathname:
+            if "/site-packages/" in pathname or "/.venv/" in pathname:
+                return False
+            if "/lib/python" in pathname or "/cpython-" in pathname:
+                return False
+            if str(PROJECT_ROOT) in pathname:
+                return True
+
+        project_modules = (
+            "application_nodes",
+            "user_nodes",
+            "job_nodes",
+            "node_shared",
+            "nodes",
+            "utilities",
+            "workbook",
+            "jobs",
+            "models",
+            "prompts",
+            "mcp_connection",
+            "app",
+            "workflow_state",
+            "__main__",
+        )
+        return any(
+            record.name == mod or record.name.startswith(f"{mod}.")
+            for mod in project_modules
+        )
+
+
+def setup_application_logging() -> None:
+    """Configure the root logger so logger.info and logger.debug across all modules write to logs/app.log."""
+    root_logger = logging.getLogger()
+    log_level_name = os.getenv("JOB_AGENT_LOG_LEVEL", "DEBUG").upper()
+    log_level = getattr(logging, log_level_name, logging.DEBUG)
+    root_logger.setLevel(log_level)
+
+    existing_handler = next(
+        (
+            h
+            for h in root_logger.handlers
+            if isinstance(h, logging.FileHandler) and getattr(h, "baseFilename", "") == str(APP_LOG_FILE_PATH)
+        ),
+        None,
+    )
+    if existing_handler:
+        if not any(isinstance(f, AppLogFilter) for f in existing_handler.filters):
+            existing_handler.addFilter(AppLogFilter())
+    else:
+        app_file_handler = logging.FileHandler(APP_LOG_FILE_PATH, mode="a", encoding="utf-8")
+        app_file_handler.setLevel(log_level)
+        app_file_handler.setFormatter(
+            ExtraFormatter("%(asctime)s [%(levelname)s] [%(name)s]: %(message)s")
+        )
+        app_file_handler.addFilter(AppLogFilter())
+        root_logger.addHandler(app_file_handler)
+
+    # Mute verbose third-party loggers from flooding app.log at DEBUG level
+    for noisy in [
+        "urllib3",
+        "requests",
+        "google",
+        "googleapiclient",
+        "google_auth_oauthlib",
+        "google.auth",
+        "websockets",
+        "httpcore",
+        "httpx",
+        "openai",
+        "asyncio",
+        "aiosqlite",
+    ]:
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+# Initialize application logging immediately
+setup_application_logging()
 
 # Dedicated logger for workflow node states
 _node_state_file_logger = logging.getLogger("node_state_file_logger")
@@ -295,7 +409,6 @@ def trace_node(function: Callable[..., T]) -> Callable[..., T]:
     if iscoroutinefunction(function):
         @wraps(function)
         async def async_wrapper(state: dict[str, Any], *args: Any, **kwargs: Any) -> T:
-            log_node_state(node_name, state)
             state_summary = _format_state_summary(state)
             _print_progress(f"→ {node_name}{state_summary}")
             _node_start = datetime.now()
@@ -323,7 +436,6 @@ def trace_node(function: Callable[..., T]) -> Callable[..., T]:
             if isinstance(result, dict) and result:
                 updated_state = dict(state)
                 updated_state.update(result)
-                log_node_state(f"{node_name} (completed)", updated_state)
             _print_progress(f"← {node_name}")
             return result
 
@@ -331,7 +443,6 @@ def trace_node(function: Callable[..., T]) -> Callable[..., T]:
 
     @wraps(function)
     def sync_wrapper(state: dict[str, Any], *args: Any, **kwargs: Any) -> T:
-        log_node_state(node_name, state)
         state_summary = _format_state_summary(state)
         _print_progress(f"→ {node_name}{state_summary}")
         _node_start = datetime.now()
@@ -359,7 +470,6 @@ def trace_node(function: Callable[..., T]) -> Callable[..., T]:
         if isinstance(result, dict) and result:
             updated_state = dict(state)
             updated_state.update(result)
-            log_node_state(f"{node_name} (completed)", updated_state)
         _print_progress(f"← {node_name}")
         return result
 

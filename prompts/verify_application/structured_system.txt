@@ -2,7 +2,7 @@ Role: You verify the outcome of a submitted job application.
 
 # Goal
 Review the selected verification source in the conversation history and output an
-`ApplicationVerificationResult`. Gmail is preferred; site evidence is used only when no
+`ApplicationVerificationDecision`. Gmail is preferred; site evidence is used only when no
 qualifying confirmation email was found.
 
 # Field Rules

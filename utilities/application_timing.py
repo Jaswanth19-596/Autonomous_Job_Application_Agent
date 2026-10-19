@@ -20,10 +20,26 @@ def start_application_timing():
     }
 
 
-def finish_application_timing(state, outcome, *, workbook_path=None):
-    """Record a completed attempt; older checkpoints may have no start time."""
+def finish_application_timing(
+    state,
+    outcome,
+    *,
+    workbook_path=None,
+    workbook_updates=None,
+):
+    """Record a completed attempt and persist all workbook fields in one update."""
     started = state.get("application_started_at")
     if started is None:
+        if workbook_path is not None and workbook_updates:
+            from workbook.jobs_workbook import update_job_row
+
+            details = state.get("job_details") or {}
+            if details.get("id"):
+                update_job_row(
+                    Path(workbook_path),
+                    str(details["id"]),
+                    dict(workbook_updates),
+                )
         return {}
     ended = time.time()
     elapsed = round(max(0.0, ended - started), 3)
@@ -56,11 +72,13 @@ def finish_application_timing(state, outcome, *, workbook_path=None):
         "applied_at": metrics.get("applied_at"),
     }
 
-    # Persist metrics columns to the workbook alongside existing timing fields.
+    # Persist status, timing, and metrics together so a Drive-backed workbook is
+    # downloaded and uploaded only once for the completed application.
     if workbook_path is not None and record["job_id"]:
         from workbook.jobs_workbook import update_job_row
 
-        update_job_row(Path(workbook_path), str(record["job_id"]), {
+        updates = dict(workbook_updates or {})
+        updates.update({
             "application_elapsed_seconds": elapsed,
             "application_started_at": record["started_at"],
             "application_finished_at": record["finished_at"],
@@ -71,6 +89,7 @@ def finish_application_timing(state, outcome, *, workbook_path=None):
             "human_intervention_count": record["human_intervention_count"],
             "applied_at": record["applied_at"] or "",
         })
+        update_job_row(Path(workbook_path), str(record["job_id"]), updates)
 
     TIMING_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with TIMING_LOG_PATH.open("a", encoding="utf-8") as log:

@@ -16,7 +16,7 @@ from mcp_connection.mcp_manager import MCPManager
 from models.schemas import (
     ApplicationResult,
     ApplicationUrlResolutionResult,
-    ApplicationVerificationResult,
+    ApplicationVerificationDecision,
     AuthenticationResult,
     JobDetailsModel,
     UserRequestDecision,
@@ -139,7 +139,7 @@ def get_custom_structured_model(model_type, config: RunnableConfig | None = None
     elif model_type == "authentication_model":
         return _with_go_structured_output(AuthenticationResult, config)
     elif model_type == "application_verification_model":
-        return _with_go_structured_output(ApplicationVerificationResult, config)
+        return _with_go_structured_output(ApplicationVerificationDecision, config)
     else:
         return None
     

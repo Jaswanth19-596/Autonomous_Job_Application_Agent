@@ -8,6 +8,7 @@ from .diagnostics import (
     log_tool_calls,
     log_tool_result,
     log_workflow_event,
+    setup_application_logging,
     trace_node,
 )
 from .job_search import get_applied_jobs
@@ -30,6 +31,7 @@ __all__ = [
     "log_tool_calls",
     "log_tool_result",
     "log_workflow_event",
+    "setup_application_logging",
     "trace_node",
     "await_with_progress",
     "route_user_request",

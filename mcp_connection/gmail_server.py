@@ -21,13 +21,15 @@ from urllib.request import Request, urlopen
 from mcp.server.fastmcp import FastMCP
 
 from mcp_connection.mcp_manager import get_gmail_credentials
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-
-GMAIL_API_BASE_URL = "https://gmail.googleapis.com/gmail/v1"
-DEFAULT_MAX_RESULTS = 5
-MAX_SEARCH_RESULTS = 10
-DEFAULT_MAX_BODY_CHARACTERS = 8_000
-MAX_BODY_CHARACTERS = 16_000
+GMAIL_API_BASE_URL = os.environ["GMAIL_API_BASE_URL"]
+DEFAULT_MAX_RESULTS = int(os.environ["DEFAULT_MAX_RESULTS"])
+MAX_SEARCH_RESULTS = int(os.environ["MAX_SEARCH_RESULTS"])
+DEFAULT_MAX_BODY_CHARACTERS = int(os.environ["DEFAULT_MAX_BODY_CHARACTERS"])
+MAX_BODY_CHARACTERS = int(os.environ["MAX_BODY_CHARACTERS"])
 
 mcp = FastMCP(
     "gmail-standard-api",

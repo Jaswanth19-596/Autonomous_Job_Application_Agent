@@ -90,16 +90,26 @@ class ApplicationResult(BaseModel):
 
     decision: ApplicationDecision
 
-class ApplicationVerificationResult(BaseModel):
-    verified_application_status: Literal[
-        "Applied", "Not Applied"
-    ] = Field(
-        description=(
-            "The verified application status, supported either by the application "
-            "site or by a matching application-confirmation email."
-        )
-    )
+class ApplicationVerificationAppliedSubModel(BaseModel):
+    action: Literal["Applied"] = "Applied"
     evidence_source: Literal["application_site", "confirmation_email", "none"] = Field(
         default="none",
         description="Where the decisive verification evidence came from."
     )
+
+class ApplicationVerificationNotAppliedSubModel(BaseModel):
+    action: Literal["Not Applied"] = "Not Applied"
+    reason_for_not_applied: str = Field(description="The reason for not applied")
+
+    
+ApplicationVerificationAction = Annotated[
+    Union[ApplicationVerificationAppliedSubModel, ApplicationVerificationNotAppliedSubModel],
+    Field(discriminator="action"),
+]
+
+
+class ApplicationVerificationDecision(BaseModel):
+    """One discriminated application-verification decision for structured output."""
+
+    decision: ApplicationVerificationAction
+
